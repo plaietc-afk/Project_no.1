@@ -1,7 +1,7 @@
 {
   "name": "tokenguard",
   "version": "1.0.0",
-  "description": "TokenGuard - AI Token Usage Monitor Proxy",
+  "description": "SOMA TOKEN MONITORING SYSTEM - AI Token Usage Monitor Proxy",
   "scripts": {
     "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
     "backend": "cd backend && npm run dev",

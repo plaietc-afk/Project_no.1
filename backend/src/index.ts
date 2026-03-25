@@ -28,9 +28,9 @@ app.use(
 );
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'TokenGuard Proxy Backend' });
+  res.json({ status: 'ok', service: 'SOMA TOKEN MONITORING SYSTEM Proxy Backend' });
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 TokenGuard Proxy running on http://localhost:${PORT}`);
+  console.log(`🚀 SOMA TOKEN MONITORING SYSTEM Proxy running on http://localhost:${PORT}`);
 });
