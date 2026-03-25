@@ -19,6 +19,7 @@ app.use(
     changeOrigin: true,
     onProxyReq: (proxyReq, req, res) => {
       console.log('Intercepted request to:', req.url);
+      console.log('Request body size:', req.headers['content-length'] || 0, 'bytes');
       // Day 2: Implement token tracking logic here
     },
     onProxyRes: (proxyRes, req, res) => {
