@@ -1,12 +1,12 @@
 {
-  "name": "genai-token-monitor",
+  "name": "tokenguard",
   "version": "1.0.0",
-  "description": "Gen AI Token Usage Monitor - API Proxy",
+  "description": "TokenGuard - AI Token Usage Monitor Proxy",
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "cd server && node index.js",
-    "client": "cd client && npm run dev",
-    "install:all": "npm install && cd server && npm install && cd ../client && npm install"
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm run dev",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
   },
   "dependencies": {
     "concurrently": "^8.2.2"
