@@ -7,6 +7,12 @@ import db from './db';
 
 dotenv.config();
 
+// Bug 2: Missing Validation - Check for OPENAI_API_KEY early
+if (!process.env.OPENAI_API_KEY) {
+  console.error('❌ FATAL ERROR: OPENAI_API_KEY is missing in environment variables (.env).');
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 
@@ -17,7 +23,7 @@ const rawBodySaver = (req: any, res: any, buf: Buffer, encoding: string) => {
     req.rawBody = buf.toString((encoding as BufferEncoding) || 'utf8');
   }
 };
-app.use(express.json({ verify: rawBodySaver }));
+app.use("/api", express.json({ verify: rawBodySaver }));
 
 // Helper to authenticate requests to Proxy
 const authenticateProxy = (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -41,7 +47,9 @@ const authenticateProxy = (req: express.Request, res: express.Response, next: ex
   next();
 };
 
-app.use(
+// Bug 1: Fix proxy routing by using app.post instead of app.use, 
+// so Express doesn't strip the '/v1/chat/completions' mount path from req.url
+app.post(
   '/v1/chat/completions',
   authenticateProxy,
   createProxyMiddleware({
@@ -50,7 +58,7 @@ app.use(
     selfHandleResponse: true,
     on: {
       proxyReq: (proxyReq: any, req: any, res: any) => {
-        console.log('Intercepted request to:', req.url);
+        console.log('Intercepted request to:', proxyReq.path);
         console.log('Request body size:', req.headers['content-length'] || 0, 'bytes');
       },
       proxyRes: responseInterceptor(async (responseBuffer: Buffer, proxyRes: any, req: any, res: any) => {
