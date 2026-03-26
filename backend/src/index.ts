@@ -54,6 +54,7 @@ app.post(
   authenticateProxy,
   createProxyMiddleware({
     target: 'https://api.openai.com',
+    pathRewrite: {'^/v1/chat/completions': '/v1/chat/completions'},
     changeOrigin: true,
     selfHandleResponse: true,
     on: {
