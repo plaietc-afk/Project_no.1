@@ -10,6 +10,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     key_name TEXT NOT NULL,
     api_key TEXT UNIQUE NOT NULL,
+    provider TEXT NOT NULL DEFAULT 'openai',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -24,5 +25,12 @@ db.exec(`
     FOREIGN KEY(api_key_id) REFERENCES api_keys(id)
   );
 `);
+
+// Try to add provider column if it doesn't exist (for existing DB)
+try {
+  db.exec("ALTER TABLE api_keys ADD COLUMN provider TEXT NOT NULL DEFAULT 'openai';");
+} catch (e) {
+  // Ignore error if column already exists
+}
 
 export default db;

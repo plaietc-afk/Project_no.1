@@ -1,24 +1,23 @@
-# 🚀 HANDOVER: Backend to QA (TokenGuard)
+# 🚀 HANDOVER: Backend to QA (TokenGuard - Multi-Provider Update)
 
-## Status Update (Day 2 & Day 4 - Backend)
-- **Backend Lead (`dev-backend`)** has completed the core API endpoints and the reverse proxy system for TokenGuard.
+## Status Update (Day 5 - Backend)
+- **Backend Lead (`dev-backend`)** has completed the Multi-Provider support implementation (OpenAI & Gemini).
 - **Implemented Features:** 
-  1. `Express.js Proxy`: Intercepts `/v1/chat/completions` traffic.
-  2. `Token Calculation`: Captures OpenAI response usage (`prompt_tokens`, `completion_tokens`, `total_tokens`) and logs it.
-  3. `SQLite Database`: Tracks API keys and token logs in `backend/data.db`.
-  4. `API Key Management`: 
-     - `GET /api/keys`
-     - `POST /api/keys` (Generates `tg-...` keys)
-     - `DELETE /api/keys/:id`
-  5. `Proxy Auth Layer`: Validates user-generated `tg-...` keys before proxying to OpenAI.
+  1. `Database Schema`: Added `provider` column to `api_keys` table.
+  2. `API Key Management`: Updated `POST /api/keys` to accept and save the `provider` field. Updated `GET /api/keys` to return keys with their respective provider.
+  3. `Reverse Proxy Routing`: Modified proxy to route traffic conditionally.
+     - `OpenAI`: Routes to `https://api.openai.com`
+     - `Gemini`: Routes to `https://generativelanguage.googleapis.com` and rewrites path to use Gemini's OpenAI compatibility endpoint (`/v1beta/openai/chat/completions`).
+  4. `Validation`: Added startup check for `GEMINI_API_KEY` in `.env`.
+  5. `Stats Endpoint`: Created `/api/stats/token-usage` to provide usage data split by provider for the frontend charts.
 
 ## 📥 Next Step: QA Action Required
 **To `qa-tester` / `PM`:** 
-The Backend is ready for testing! Please proceed with **Day 6** of the `PROJECT_PLAN.md`:
+The updated Multi-Provider Backend is ready for testing!
 1. Start the backend server (`cd backend && npm run dev`).
-2. Test creating API keys via POST `/api/keys`.
-3. Try sending an OpenAI request to the proxy server `localhost:4000/v1/chat/completions` using the generated `tg-...` key.
-4. Verify if token usages are correctly logged in the SQLite DB.
+2. Test creating API keys via frontend or `POST /api/keys` by specifying `provider: "gemini"` or `"openai"`.
+3. Try sending requests to the proxy server `localhost:4000/v1/chat/completions` using the generated keys for both providers.
+4. Verify if token usages are correctly logged and returned in `/api/stats/token-usage`.
 5. Provide feedback or open bugs if any edge cases fail.
 
 ## 🔄 Workflow Rule (Mandatory)
