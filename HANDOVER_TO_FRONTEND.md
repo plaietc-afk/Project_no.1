@@ -46,3 +46,28 @@ The Backend API is running at `localhost:4000`. Please integrate these new metri
 - `POST /api/keys` now officially supports: `openai`, `gemini`, `anthropic`, and `groq`.
 - The `/api/stats/token-usage` endpoint returns data for all of these dynamically.
 - Cost/USD pricing is accurate to the penny for models like Claude 3, Llama 3, Gemini 1.5, and GPT-4.
+
+---
+## 🚀 UPDATE: Phase 3 (Open-Source Caching Layer)
+
+**Backend Lead (`dev-backend`)** has completed the Killer Feature: Caching!
+
+**What's New:**
+- **In-Memory/SQLite Caching:** Identical prompts (hashed via SHA-256) will hit the cache instead of the external providers. 
+- **Money Saved Tracking:** When a cache hit occurs, the Backend calculates the `cost_usd_saved` (what it *would* have cost) and logs it.
+- **Updated Stats Endpoint:** `GET /api/stats/token-usage` now returns a nested object structure. Example:
+  ```json
+  {
+    "providers": {
+      "OpenAI": {
+        "tokens": [1200, 1500],
+        "cost": [0.0024, 0.0030],
+        "saved": [0.0015, 0.0] 
+      }
+    },
+    "global": {
+      "total_cost_saved_usd": 15.42
+    }
+  }
+  ```
+- **Action for Frontend:** Please create a giant "Money Saved" widget on the Dashboard to show users how much money our proxy is saving them! You can use `global.total_cost_saved_usd`.
