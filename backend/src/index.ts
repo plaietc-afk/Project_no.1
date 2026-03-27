@@ -44,6 +44,45 @@ app.post('/v1/chat/completions', authenticateProxy, async (req: express.Request,
     const body = req.body;
     let targetModel = body.model || 'gpt-3.5-turbo';
     
+    // --- CACHE LAYER ---
+    // Create a deterministic hash of the request body
+    const reqBodyString = JSON.stringify({
+      model: body.model,
+      messages: body.messages,
+      temperature: body.temperature,
+      max_tokens: body.max_tokens,
+      provider: providerStr // Same prompt but different provider = different cache
+    });
+    const reqHash = crypto.createHash('sha256').update(reqBodyString).digest('hex');
+    
+    // Check if we have a valid cache entry
+    const cacheStmt = db.prepare('SELECT response_json FROM request_cache WHERE req_hash = ? AND expires_at > datetime("now")');
+    const cachedRecord = cacheStmt.get(reqHash) as { response_json: string } | undefined;
+
+    if (cachedRecord) {
+      console.log(`[CACHE HIT] Request matched hash: ${reqHash.substring(0, 8)}...`);
+      const cachedResponse = JSON.parse(cachedRecord.response_json);
+      
+      // Calculate how much we saved!
+      const { prompt_tokens, completion_tokens, total_tokens } = cachedResponse.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+      const modelToPrice = cachedResponse.model || targetModel;
+      const costUsdSaved = calculateCost(modelToPrice, prompt_tokens, completion_tokens);
+      
+      // Log the cache hit to token_logs with is_cached = 1 and cost_usd_saved
+      const logStmt = db.prepare(`
+        INSERT INTO token_logs (api_key_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, is_cached, cost_usd_saved)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+      `);
+      logStmt.run(apiKeyId, modelToPrice, prompt_tokens, completion_tokens, total_tokens, 0, costUsdSaved);
+      
+      // Add a header so the client knows it was cached
+      res.setHeader('X-Cache', 'HIT');
+      return res.json(cachedResponse);
+    }
+    
+    // --- CACHE MISS: Proceed to Provider ---
+    console.log(`[CACHE MISS] Sending request to ${providerStr}...`);
+    
     // Check if adapter exists
     const adapter = ProviderRegistry[providerStr];
     if (!adapter) {
@@ -61,16 +100,24 @@ app.post('/v1/chat/completions', authenticateProxy, async (req: express.Request,
     const response = await adapter.chatCompletion(body, providerApiKey);
     
     // Extract usage and calculate cost
-    const { prompt_tokens, completion_tokens, total_tokens } = response.usage;
-    const costUsd = calculateCost(response.model, prompt_tokens, completion_tokens);
+    const { prompt_tokens, completion_tokens, total_tokens } = response.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+    const costUsd = calculateCost(response.model || targetModel, prompt_tokens, completion_tokens);
     
-    // Save to Database
-    const stmt = db.prepare(`
-      INSERT INTO token_logs (api_key_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd)
-      VALUES (?, ?, ?, ?, ?, ?)
+    // Save to Database (Token Logs)
+    const logStmt = db.prepare(`
+      INSERT INTO token_logs (api_key_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, is_cached, cost_usd_saved)
+      VALUES (?, ?, ?, ?, ?, ?, 0, 0)
     `);
-    stmt.run(apiKeyId, response.model, prompt_tokens, completion_tokens, total_tokens, costUsd);
+    logStmt.run(apiKeyId, response.model || targetModel, prompt_tokens, completion_tokens, total_tokens, costUsd);
     
+    // Save to Database (Request Cache) - TTL: 24 hours
+    const saveCacheStmt = db.prepare(`
+      INSERT OR REPLACE INTO request_cache (req_hash, response_json, expires_at)
+      VALUES (?, ?, datetime("now", "+1 day"))
+    `);
+    saveCacheStmt.run(reqHash, JSON.stringify(response));
+    
+    res.setHeader('X-Cache', 'MISS');
     return res.json(response);
 
   } catch (error: any) {
@@ -125,7 +172,12 @@ app.delete('/api/keys/:id', (req, res) => {
 
 app.get('/api/stats/token-usage', (req, res) => {
   const stmt = db.prepare(`
-    SELECT k.provider, date(t.created_at) as date, SUM(t.total_tokens) as tokens, SUM(t.cost_usd) as cost
+    SELECT 
+      k.provider, 
+      date(t.created_at) as date, 
+      SUM(t.total_tokens) as tokens, 
+      SUM(t.cost_usd) as cost,
+      SUM(t.cost_usd_saved) as saved
     FROM token_logs t
     JOIN api_keys k ON t.api_key_id = k.id
     GROUP BY k.provider, date(t.created_at)
@@ -133,30 +185,41 @@ app.get('/api/stats/token-usage', (req, res) => {
   `);
   
   const logs = stmt.all() as any[];
-  const stats: Record<string, { tokens: number[], cost: number[] }> = {
-    OpenAI: { tokens: [], cost: [] },
-    Gemini: { tokens: [], cost: [] },
-    Anthropic: { tokens: [], cost: [] },
-    Groq: { tokens: [], cost: [] }
+  const stats: Record<string, { tokens: number[], cost: number[], saved: number[] }> = {
+    OpenAI: { tokens: [], cost: [], saved: [] },
+    Gemini: { tokens: [], cost: [], saved: [] },
+    Anthropic: { tokens: [], cost: [], saved: [] },
+    Groq: { tokens: [], cost: [], saved: [] }
   };
+  
+  // Also calculate total global stats
+  let totalSaved = 0;
   
   logs.forEach(log => {
     const prov = log.provider.toLowerCase();
     const providerCapitalized = prov.charAt(0).toUpperCase() + prov.slice(1);
     
     if (!stats[providerCapitalized]) {
-      stats[providerCapitalized] = { tokens: [], cost: [] };
+      stats[providerCapitalized] = { tokens: [], cost: [], saved: [] };
     }
     
     stats[providerCapitalized].tokens.push(log.tokens);
     stats[providerCapitalized].cost.push(log.cost || 0);
+    stats[providerCapitalized].saved.push(log.saved || 0);
+    
+    totalSaved += (log.saved || 0);
   });
   
-  res.json(stats);
+  res.json({
+    providers: stats,
+    global: {
+      total_cost_saved_usd: totalSaved
+    }
+  });
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'SOMA TOKEN MONITORING SYSTEM Proxy Backend Phase 2' });
+  res.json({ status: 'ok', service: 'SOMA TOKEN MONITORING SYSTEM Proxy Backend Phase 3' });
 });
 
 app.listen(PORT, () => {

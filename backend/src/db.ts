@@ -11,6 +11,8 @@ db.exec(`
     key_name TEXT NOT NULL,
     api_key TEXT UNIQUE NOT NULL,
     provider TEXT NOT NULL DEFAULT 'openai',
+    budget REAL DEFAULT 0,
+    project_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -21,28 +23,29 @@ db.exec(`
     prompt_tokens INTEGER DEFAULT 0,
     completion_tokens INTEGER DEFAULT 0,
     total_tokens INTEGER DEFAULT 0,
+    cost_usd REAL DEFAULT 0,
+    is_cached INTEGER DEFAULT 0,
+    cost_usd_saved REAL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(api_key_id) REFERENCES api_keys(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS request_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    req_hash TEXT UNIQUE NOT NULL,
+    response_json TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL
   );
 `);
 
 // Try to add provider column if it doesn't exist (for existing DB)
-try {
-  db.exec("ALTER TABLE api_keys ADD COLUMN provider TEXT NOT NULL DEFAULT 'openai';");
-} catch (e) {
-  // Ignore error if column already exists
-}
+try { db.exec("ALTER TABLE api_keys ADD COLUMN provider TEXT NOT NULL DEFAULT 'openai';"); } catch (e) { }
+try { db.exec("ALTER TABLE api_keys ADD COLUMN budget REAL DEFAULT 0;"); } catch (e) { }
+try { db.exec("ALTER TABLE api_keys ADD COLUMN project_id TEXT;"); } catch (e) { }
 
-try {
-  db.exec("ALTER TABLE api_keys ADD COLUMN budget REAL DEFAULT 0;");
-} catch (e) { }
-
-try {
-  db.exec("ALTER TABLE api_keys ADD COLUMN project_id TEXT;");
-} catch (e) { }
-
-try {
-  db.exec("ALTER TABLE token_logs ADD COLUMN cost_usd REAL DEFAULT 0;");
-} catch (e) { }
+try { db.exec("ALTER TABLE token_logs ADD COLUMN cost_usd REAL DEFAULT 0;"); } catch (e) { }
+try { db.exec("ALTER TABLE token_logs ADD COLUMN is_cached INTEGER DEFAULT 0;"); } catch (e) { }
+try { db.exec("ALTER TABLE token_logs ADD COLUMN cost_usd_saved REAL DEFAULT 0;"); } catch (e) { }
 
 export default db;
