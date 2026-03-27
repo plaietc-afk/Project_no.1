@@ -33,4 +33,16 @@ try {
   // Ignore error if column already exists
 }
 
+try {
+  db.exec("ALTER TABLE api_keys ADD COLUMN budget REAL DEFAULT 0;");
+} catch (e) { }
+
+try {
+  db.exec("ALTER TABLE api_keys ADD COLUMN project_id TEXT;");
+} catch (e) { }
+
+try {
+  db.exec("ALTER TABLE token_logs ADD COLUMN cost_usd REAL DEFAULT 0;");
+} catch (e) { }
+
 export default db;
