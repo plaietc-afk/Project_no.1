@@ -1,0 +1,48 @@
+# 🚀 HANDOVER: Backend to Frontend (Phase 2 - Cost & Budgeting)
+
+## Status Update (Sprint Phase 2)
+- **Backend Lead (`dev-backend`)** has completed the "Clean-room" Unified API Handler and the Pricing Engine.
+
+## 📥 What's New for Frontend?
+**1. New Fields in API Keys**
+- `GET /api/keys` now returns two new fields for each key:
+  - `budget` (number) - The budget limit set for this key (in USD).
+  - `project_id` (string|null) - An optional identifier for the project using the key.
+- `POST /api/keys` now accepts these fields when creating a new key:
+  ```json
+  {
+    "name": "My New Project",
+    "provider": "Gemini",
+    "budget": 50.00,
+    "project_id": "proj_123"
+  }
+  ```
+
+**2. Upgraded Stats Endpoint with Cost ($)**
+- `GET /api/stats/token-usage` has been upgraded to provide both `tokens` and `cost` arrays.
+- **New Response Format:**
+  ```json
+  {
+    "OpenAI": {
+      "tokens": [1200, 1500, 1800],
+      "cost": [0.0024, 0.0030, 0.0036] // USD values calculated by Pricing Engine
+    },
+    "Gemini": {
+      "tokens": [800, 900, 1100],
+      "cost": [0.0016, 0.0018, 0.0022]
+    }
+  }
+  ```
+- **Action for Frontend:** Please update the Token Usage charts to allow users to toggle between viewing "Tokens" and "Cost ($)". You can also use the `budget` field to display a progress bar for each API Key in the management table.
+
+## 🔄 Workflow Rule (Mandatory)
+The Backend API is running at `localhost:4000`. Please integrate these new metrics into the Dashboard UI and notify PM/QA when the views are ready.
+
+---
+## 🚀 UPDATE: Phase 2 Ultimate (Dynamic Provider System)
+
+**Backend Lead (`dev-backend`)** has completely overhauled the proxy system to use a **Dynamic Provider Adapter Pattern**!
+
+- `POST /api/keys` now officially supports: `openai`, `gemini`, `anthropic`, and `groq`.
+- The `/api/stats/token-usage` endpoint returns data for all of these dynamically.
+- Cost/USD pricing is accurate to the penny for models like Claude 3, Llama 3, Gemini 1.5, and GPT-4.
