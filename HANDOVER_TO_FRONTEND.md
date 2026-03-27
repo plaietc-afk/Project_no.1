@@ -84,3 +84,15 @@ The Backend API is running at `localhost:4000`. Please integrate these new metri
   - `last_alert_percentage` (number): The last alert that was successfully sent.
 - **New `PUT /api/keys/:id` Endpoint:** You can now allow users to update their API keys, including the new webhook fields.
 - **Action for Frontend:** Please update the API Key management page. Add fields for users to input their `webhook_url` and configure their desired `alert_thresholds`.
+
+---
+## 🚀 UPDATE: Phase 3 - Rate Limiting & Throttling
+
+**Backend Lead (`dev-backend`)** has completed the Rate Limiting feature!
+
+**What's New for Frontend:**
+- **New API Key Fields:** The `api_keys` object now includes:
+  - `rpm_limit` (number): Requests Per Minute limit.
+  - `tpm_limit` (number): Tokens Per Minute limit (based on prompt tokens).
+- **`PUT /api/keys/:id` Endpoint:** Has been updated to support saving these new limits.
+- **Action for Frontend:** Please update the API Key management page. Add fields for users to configure `rpm_limit` and `tpm_limit` for each key to protect their APIs from abuse.

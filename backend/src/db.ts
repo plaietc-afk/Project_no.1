@@ -16,6 +16,8 @@ db.exec(`
     webhook_url TEXT,
     alert_thresholds TEXT DEFAULT '[80,95]',
     last_alert_percentage INTEGER DEFAULT 0,
+    rpm_limit INTEGER DEFAULT 0,
+    tpm_limit INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -43,13 +45,14 @@ db.exec(`
 `);
 
 // --- MIGRATIONS ---
-// Add columns if they don't exist (for existing DBs)
 try { db.exec("ALTER TABLE api_keys ADD COLUMN provider TEXT NOT NULL DEFAULT 'openai';"); } catch (e) { }
 try { db.exec("ALTER TABLE api_keys ADD COLUMN budget REAL DEFAULT 0;"); } catch (e) { }
 try { db.exec("ALTER TABLE api_keys ADD COLUMN project_id TEXT;"); } catch (e) { }
 try { db.exec("ALTER TABLE api_keys ADD COLUMN webhook_url TEXT;"); } catch (e) { }
 try { db.exec("ALTER TABLE api_keys ADD COLUMN alert_thresholds TEXT DEFAULT '[80,95]';"); } catch (e) { }
 try { db.exec("ALTER TABLE api_keys ADD COLUMN last_alert_percentage INTEGER DEFAULT 0;"); } catch (e) { }
+try { db.exec("ALTER TABLE api_keys ADD COLUMN rpm_limit INTEGER DEFAULT 0;"); } catch (e) { }
+try { db.exec("ALTER TABLE api_keys ADD COLUMN tpm_limit INTEGER DEFAULT 0;"); } catch (e) { }
 
 try { db.exec("ALTER TABLE token_logs ADD COLUMN cost_usd REAL DEFAULT 0;"); } catch (e) { }
 try { db.exec("ALTER TABLE token_logs ADD COLUMN is_cached INTEGER DEFAULT 0;"); } catch (e) { }
