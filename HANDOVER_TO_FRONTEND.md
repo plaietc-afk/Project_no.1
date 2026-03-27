@@ -71,3 +71,16 @@ The Backend API is running at `localhost:4000`. Please integrate these new metri
   }
   ```
 - **Action for Frontend:** Please create a giant "Money Saved" widget on the Dashboard to show users how much money our proxy is saving them! You can use `global.total_cost_saved_usd`.
+
+---
+## 🚀 UPDATE: Phase 3 - Alert & Webhook System
+
+**Backend Lead (`dev-backend`)** has completed the Budget Alerting system!
+
+**What's New for Frontend:**
+- **New API Key Fields:** The `api_keys` object now includes:
+  - `webhook_url` (string|null): The URL to send budget alerts to.
+  - `alert_thresholds` (string, JSON array): E.g., `"[80, 95]"`. The percentages of budget usage that will trigger an alert.
+  - `last_alert_percentage` (number): The last alert that was successfully sent.
+- **New `PUT /api/keys/:id` Endpoint:** You can now allow users to update their API keys, including the new webhook fields.
+- **Action for Frontend:** Please update the API Key management page. Add fields for users to input their `webhook_url` and configure their desired `alert_thresholds`.

@@ -14,111 +14,113 @@ const PORT = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
+// --- Alert & Webhook Logic ---
+async function checkBudgetAndAlert(apiKeyId: number) {
+  try {
+    const keyStmt = db.prepare('SELECT project_id, budget, webhook_url, alert_thresholds, last_alert_percentage FROM api_keys WHERE id = ?');
+    const keyInfo = keyStmt.get(apiKeyId) as { project_id: string, budget: number, webhook_url: string, alert_thresholds: string, last_alert_percentage: number } | undefined;
+
+    if (!keyInfo || !keyInfo.webhook_url || keyInfo.budget <= 0) {
+      return; // No webhook URL or budget set, so nothing to do.
+    }
+
+    const costStmt = db.prepare('SELECT SUM(cost_usd) as total_cost FROM token_logs WHERE api_key_id = ?');
+    const { total_cost } = costStmt.get(apiKeyId) as { total_cost: number };
+
+    const usagePercentage = (total_cost / keyInfo.budget) * 100;
+    const thresholds: number[] = JSON.parse(keyInfo.alert_thresholds || '[80, 95]');
+    let newAlertPercentage = keyInfo.last_alert_percentage;
+
+    for (const threshold of thresholds) {
+      if (usagePercentage >= threshold && keyInfo.last_alert_percentage < threshold) {
+        // Fire webhook!
+        console.log(`[ALERT] Firing webhook for key ${apiKeyId}. Budget usage ${usagePercentage.toFixed(2)}% has passed ${threshold}% threshold.`);
+        
+        const payload = {
+          event: 'budget_alert',
+          project_id: keyInfo.project_id || 'N/A',
+          api_key_id: apiKeyId,
+          budget_usd: keyInfo.budget,
+          current_spend_usd: total_cost,
+          usage_percentage: usagePercentage,
+          threshold_triggered: threshold,
+          message: `Budget Alert: Your project has used ${usagePercentage.toFixed(2)}% of its budget, passing the ${threshold}% threshold.`
+        };
+
+        fetch(keyInfo.webhook_url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }).catch(err => console.error(`[ALERT] Failed to send webhook for key ${apiKeyId}:`, err));
+        
+        // Update the last alert percentage to the current threshold to prevent re-firing
+        newAlertPercentage = threshold;
+      }
+    }
+
+    if (newAlertPercentage !== keyInfo.last_alert_percentage) {
+      const updateStmt = db.prepare('UPDATE api_keys SET last_alert_percentage = ? WHERE id = ?');
+      updateStmt.run(newAlertPercentage, apiKeyId);
+    }
+
+  } catch (error) {
+    console.error('[ALERT] Error in checkBudgetAndAlert:', error);
+  }
+}
+
 const authenticateProxy = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    res.status(401).json({ error: 'Missing Authorization header' });
-    return;
-  }
+  if (!authHeader) return res.status(401).json({ error: 'Missing Authorization header' });
   const token = authHeader.split(' ')[1];
-  const stmt = db.prepare('SELECT id, provider, budget, project_id FROM api_keys WHERE api_key = ?');
-  const apiKeyRecord = stmt.get(token) as { id: number, provider: string, budget: number, project_id: string } | undefined;
-  
-  if (!apiKeyRecord) {
-    res.status(403).json({ error: 'Invalid API Key' });
-    return;
-  }
-  
+  const stmt = db.prepare('SELECT id, provider FROM api_keys WHERE api_key = ?');
+  const apiKeyRecord = stmt.get(token) as { id: number, provider: string } | undefined;
+  if (!apiKeyRecord) return res.status(403).json({ error: 'Invalid API Key' });
   (req as any).apiKeyId = apiKeyRecord.id;
   (req as any).provider = (apiKeyRecord.provider || 'openai').toLowerCase();
-  (req as any).budget = apiKeyRecord.budget;
-  (req as any).projectId = apiKeyRecord.project_id;
-  
   next();
 };
 
 app.post('/v1/chat/completions', authenticateProxy, async (req: express.Request, res: express.Response) => {
   try {
-    const providerStr = (req as any).provider;
     const apiKeyId = (req as any).apiKeyId;
     const body = req.body;
-    let targetModel = body.model || 'gpt-3.5-turbo';
     
     // --- CACHE LAYER ---
-    // Create a deterministic hash of the request body
-    const reqBodyString = JSON.stringify({
-      model: body.model,
-      messages: body.messages,
-      temperature: body.temperature,
-      max_tokens: body.max_tokens,
-      provider: providerStr // Same prompt but different provider = different cache
-    });
+    const reqBodyString = JSON.stringify({ model: body.model, messages: body.messages, temperature: body.temperature, max_tokens: body.max_tokens, provider: (req as any).provider });
     const reqHash = crypto.createHash('sha256').update(reqBodyString).digest('hex');
-    
-    // Check if we have a valid cache entry
     const cacheStmt = db.prepare('SELECT response_json FROM request_cache WHERE req_hash = ? AND expires_at > datetime("now")');
     const cachedRecord = cacheStmt.get(reqHash) as { response_json: string } | undefined;
 
     if (cachedRecord) {
-      console.log(`[CACHE HIT] Request matched hash: ${reqHash.substring(0, 8)}...`);
       const cachedResponse = JSON.parse(cachedRecord.response_json);
-      
-      // Calculate how much we saved!
-      const { prompt_tokens, completion_tokens, total_tokens } = cachedResponse.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
-      const modelToPrice = cachedResponse.model || targetModel;
-      const costUsdSaved = calculateCost(modelToPrice, prompt_tokens, completion_tokens);
-      
-      // Log the cache hit to token_logs with is_cached = 1 and cost_usd_saved
-      const logStmt = db.prepare(`
-        INSERT INTO token_logs (api_key_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, is_cached, cost_usd_saved)
-        VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-      `);
-      logStmt.run(apiKeyId, modelToPrice, prompt_tokens, completion_tokens, total_tokens, 0, costUsdSaved);
-      
-      // Add a header so the client knows it was cached
+      const { prompt_tokens, completion_tokens, total_tokens } = cachedResponse.usage;
+      const costUsdSaved = calculateCost(cachedResponse.model, prompt_tokens, completion_tokens);
+      db.prepare('INSERT INTO token_logs (api_key_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, is_cached, cost_usd_saved) VALUES (?, ?, ?, ?, ?, ?, 1, ?)').run(apiKeyId, cachedResponse.model, prompt_tokens, completion_tokens, total_tokens, 0, costUsdSaved);
       res.setHeader('X-Cache', 'HIT');
       return res.json(cachedResponse);
     }
     
     // --- CACHE MISS: Proceed to Provider ---
-    console.log(`[CACHE MISS] Sending request to ${providerStr}...`);
-    
-    // Check if adapter exists
+    const providerStr = (req as any).provider;
     const adapter = ProviderRegistry[providerStr];
-    if (!adapter) {
-      return res.status(400).json({ error: { message: `Unsupported provider: ${providerStr}` } });
-    }
-    
-    // Get actual API key from ENV based on provider
+    if (!adapter) return res.status(400).json({ error: { message: `Unsupported provider: ${providerStr}` } });
+
     const envKeyName = `${providerStr.toUpperCase()}_API_KEY`;
     const providerApiKey = process.env[envKeyName];
-    if (!providerApiKey) {
-      return res.status(500).json({ error: { message: `Missing ${envKeyName} in server configuration.` } });
-    }
+    if (!providerApiKey) return res.status(500).json({ error: { message: `Missing ${envKeyName} in server configuration.` } });
 
-    // Process via Adapter
     const response = await adapter.chatCompletion(body, providerApiKey);
-    
-    // Extract usage and calculate cost
-    const { prompt_tokens, completion_tokens, total_tokens } = response.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
-    const costUsd = calculateCost(response.model || targetModel, prompt_tokens, completion_tokens);
-    
-    // Save to Database (Token Logs)
-    const logStmt = db.prepare(`
-      INSERT INTO token_logs (api_key_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, is_cached, cost_usd_saved)
-      VALUES (?, ?, ?, ?, ?, ?, 0, 0)
-    `);
-    logStmt.run(apiKeyId, response.model || targetModel, prompt_tokens, completion_tokens, total_tokens, costUsd);
-    
-    // Save to Database (Request Cache) - TTL: 24 hours
-    const saveCacheStmt = db.prepare(`
-      INSERT OR REPLACE INTO request_cache (req_hash, response_json, expires_at)
-      VALUES (?, ?, datetime("now", "+1 day"))
-    `);
-    saveCacheStmt.run(reqHash, JSON.stringify(response));
+    const { prompt_tokens, completion_tokens, total_tokens } = response.usage;
+    const costUsd = calculateCost(response.model, prompt_tokens, completion_tokens);
+
+    db.prepare('INSERT INTO token_logs (api_key_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd) VALUES (?, ?, ?, ?, ?, ?)').run(apiKeyId, response.model, prompt_tokens, completion_tokens, total_tokens, costUsd);
+    db.prepare('INSERT OR REPLACE INTO request_cache (req_hash, response_json, expires_at) VALUES (?, ?, datetime("now", "+1 day"))').run(reqHash, JSON.stringify(response));
     
     res.setHeader('X-Cache', 'MISS');
-    return res.json(response);
+    res.json(response);
+
+    // Check for alerts AFTER sending the response
+    checkBudgetAndAlert(apiKeyId);
 
   } catch (error: any) {
     console.error('Unified API Error:', error);
@@ -128,94 +130,43 @@ app.post('/v1/chat/completions', authenticateProxy, async (req: express.Request,
 
 // --- API Endpoints ---
 app.get('/api/keys', (req, res) => {
-  const stmt = db.prepare('SELECT id, key_name, api_key, provider, budget, project_id, created_at FROM api_keys ORDER BY created_at DESC');
-  const keys = stmt.all() as any[];
-  
-  const formattedKeys = keys.map(k => ({
-    id: k.id,
-    name: k.key_name,
-    provider: k.provider ? k.provider.charAt(0).toUpperCase() + k.provider.slice(1).toLowerCase() : 'OpenAI',
-    prefix: k.api_key.substring(0, 7) + '...',
-    budget: k.budget,
-    project_id: k.project_id,
-    created: k.created_at.split(' ')[0]
-  }));
-  
-  res.json(formattedKeys);
+  const keys = db.prepare('SELECT id, key_name, api_key, provider, budget, project_id, webhook_url, alert_thresholds, last_alert_percentage, created_at FROM api_keys ORDER BY created_at DESC').all() as any[];
+  res.json(keys);
 });
 
 app.post('/api/keys', (req, res) => {
-  const { name, provider, budget, project_id } = req.body;
-  const key_name = name || req.body.key_name;
-  
-  if (!key_name) {
-    res.status(400).json({ error: 'name is required' });
-    return;
-  }
-  
-  const prov = provider ? provider.toLowerCase() : 'openai';
-  const budg = budget || 0;
-  const proj = project_id || null;
+  const { name, provider, budget, project_id, webhook_url, alert_thresholds } = req.body;
+  if (!name) return res.status(400).json({ error: 'name is required' });
   const newKey = 'tg-' + crypto.randomBytes(16).toString('hex');
-  const stmt = db.prepare('INSERT INTO api_keys (key_name, api_key, provider, budget, project_id) VALUES (?, ?, ?, ?, ?)');
-  const result = stmt.run(key_name, newKey, prov, budg, proj);
-  
-  res.json({ id: result.lastInsertRowid, name: key_name, provider: prov, api_key: newKey, budget: budg, project_id: proj });
+  const result = db.prepare('INSERT INTO api_keys (key_name, api_key, provider, budget, project_id, webhook_url, alert_thresholds) VALUES (?, ?, ?, ?, ?, ?, ?)').run(name, newKey, provider || 'openai', budget || 0, project_id, webhook_url, JSON.stringify(alert_thresholds || [80, 95]));
+  res.json({ id: result.lastInsertRowid, api_key: newKey, ...req.body });
+});
+
+app.put('/api/keys/:id', (req, res) => {
+  const { id } = req.params;
+  const { name, provider, budget, project_id, webhook_url, alert_thresholds } = req.body;
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  db.prepare('UPDATE api_keys SET key_name = ?, provider = ?, budget = ?, project_id = ?, webhook_url = ?, alert_thresholds = ? WHERE id = ?').run(name, provider, budget, project_id, webhook_url, JSON.stringify(alert_thresholds), id);
+  res.json({ success: true, ...req.body });
 });
 
 app.delete('/api/keys/:id', (req, res) => {
-  const id = req.params.id;
-  const stmt = db.prepare('DELETE FROM api_keys WHERE id = ?');
-  stmt.run(id);
+  db.prepare('DELETE FROM api_keys WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
 
 app.get('/api/stats/token-usage', (req, res) => {
-  const stmt = db.prepare(`
-    SELECT 
-      k.provider, 
-      date(t.created_at) as date, 
-      SUM(t.total_tokens) as tokens, 
-      SUM(t.cost_usd) as cost,
-      SUM(t.cost_usd_saved) as saved
-    FROM token_logs t
-    JOIN api_keys k ON t.api_key_id = k.id
-    GROUP BY k.provider, date(t.created_at)
-    ORDER BY date ASC
-  `);
-  
-  const logs = stmt.all() as any[];
-  const stats: Record<string, { tokens: number[], cost: number[], saved: number[] }> = {
-    OpenAI: { tokens: [], cost: [], saved: [] },
-    Gemini: { tokens: [], cost: [], saved: [] },
-    Anthropic: { tokens: [], cost: [], saved: [] },
-    Groq: { tokens: [], cost: [], saved: [] }
-  };
-  
-  // Also calculate total global stats
-  let totalSaved = 0;
-  
-  logs.forEach(log => {
-    const prov = log.provider.toLowerCase();
-    const providerCapitalized = prov.charAt(0).toUpperCase() + prov.slice(1);
-    
-    if (!stats[providerCapitalized]) {
-      stats[providerCapitalized] = { tokens: [], cost: [], saved: [] };
-    }
-    
-    stats[providerCapitalized].tokens.push(log.tokens);
-    stats[providerCapitalized].cost.push(log.cost || 0);
-    stats[providerCapitalized].saved.push(log.saved || 0);
-    
-    totalSaved += (log.saved || 0);
-  });
-  
-  res.json({
-    providers: stats,
-    global: {
-      total_cost_saved_usd: totalSaved
-    }
-  });
+  const logs = db.prepare('SELECT k.provider, date(t.created_at) as date, SUM(t.total_tokens) as tokens, SUM(t.cost_usd) as cost, SUM(t.cost_usd_saved) as saved FROM token_logs t JOIN api_keys k ON t.api_key_id = k.id GROUP BY k.provider, date(t.created_at) ORDER BY date ASC').all() as any[];
+  const stats = logs.reduce((acc, log) => {
+    const prov = log.provider.charAt(0).toUpperCase() + log.provider.slice(1);
+    if (!acc[prov]) acc[prov] = { tokens: [], cost: [], saved: [] };
+    acc[prov].tokens.push(log.tokens);
+    acc[prov].cost.push(log.cost || 0);
+    acc[prov].saved.push(log.saved || 0);
+    return acc;
+  }, {});
+  const totalSaved = (db.prepare('SELECT SUM(cost_usd_saved) as total FROM token_logs').get() as any).total || 0;
+  res.json({ providers: stats, global: { total_cost_saved_usd: totalSaved } });
 });
 
 app.get('/api/health', (req, res) => {
