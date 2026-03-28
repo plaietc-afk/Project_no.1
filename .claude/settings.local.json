@@ -33,7 +33,9 @@
       "Bash(cmd /c \"powershell -ExecutionPolicy Bypass -Command \"\"Get-Process -Name node -ErrorAction SilentlyContinue | Select-Object Id,Name,Path | Format-Table -AutoSize\"\"\")",
       "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"Get-Process -Id 36540 -ErrorAction SilentlyContinue | Format-List Id,Name,Path\")",
       "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"Get-Process -Id 36540 | Select-Object -ExpandProperty CommandLine\")",
-      "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"Stop-Process -Id 36540 -Force; Write-Output ''killed''\")"
+      "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"Stop-Process -Id 36540 -Force; Write-Output ''killed''\")",
+      "Bash(npx next:*)",
+      "Bash(./node_modules/.bin/next lint:*)"
     ]
   }
 }
