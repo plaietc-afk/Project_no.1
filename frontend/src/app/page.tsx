@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   keysApi, statsApi,
@@ -289,7 +290,7 @@ export default function Dashboard() {
       <nav className="border-b border-zinc-800 bg-[#09090b]/80 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="font-semibold text-white tracking-tight">TokenGuard</span>
+            <Image src="/logo.png" alt="TokenGuard" height={28} width={120} className="h-7 w-auto" />
           </div>
           <div className="flex items-center gap-3">
             <select

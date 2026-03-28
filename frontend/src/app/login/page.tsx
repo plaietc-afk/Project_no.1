@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, Suspense } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authApi } from "../../lib/auth";
 
@@ -35,7 +36,7 @@ function LoginForm() {
     <div className="min-h-screen bg-[#09090b] flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-white tracking-tight">TokenGuard</h1>
+          <Image src="/logo.png" alt="TokenGuard" height={40} width={160} className="h-10 w-auto mx-auto" />
           <p className="text-zinc-500 text-sm mt-1">Sign in to your account</p>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
