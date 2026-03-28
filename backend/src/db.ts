@@ -28,7 +28,7 @@ db.exec(`
     password_hash TEXT NOT NULL,
     full_name TEXT,
     role TEXT DEFAULT 'user',
-    package_id INTEGER DEFAULT 1,
+    package_id INTEGER DEFAULT 3,
     tokens_used INTEGER DEFAULT 0,
     usd_spent REAL DEFAULT 0,
     usage_reset_at DATETIME,

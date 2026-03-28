@@ -224,27 +224,6 @@ function NewKeyModal({ onClose, onCreate }: { onClose: () => void; onCreate: (ke
   );
 }
 
-// ---- Package Quota Bar ----
-function QuotaBar({ label, used, total, unit }: { label: string; used: number; total: number; unit: string }) {
-  const unlimited = total === 0;
-  const pct = unlimited ? 0 : Math.min(100, (used / total) * 100);
-  const color = pct >= 95 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-indigo-500";
-  return (
-    <div className="flex-1 min-w-0">
-      <div className="flex justify-between items-baseline mb-1">
-        <span className="text-xs text-zinc-400">{label}</span>
-        <span className="text-xs text-zinc-500">
-          {unlimited ? "Unlimited" : `${fmtK(used)} / ${fmtK(total)} ${unit}`}
-        </span>
-      </div>
-      {!unlimited && (
-        <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-          <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ---- Main Dashboard ----
 export default function Dashboard() {
@@ -363,44 +342,6 @@ export default function Dashboard() {
           <StatCard label="Active Keys" value={String(keys.filter(k => k.is_active).length)} sub={`of ${keys.length} total`} />
         </div>
 
-        {/* Package Quota */}
-        {currentUser?.package && (
-          <div className="bg-zinc-900 border border-zinc-800/50 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-zinc-300">
-                {currentUser.package.display_name} Plan Usage
-              </h2>
-              <span className="text-xs text-zinc-500">
-                Resets monthly
-              </span>
-            </div>
-            <div className="flex gap-6 flex-wrap">
-              <QuotaBar
-                label="Tokens"
-                used={currentUser.usage.tokens_used}
-                total={currentUser.package.token_quota}
-                unit="tokens"
-              />
-              <QuotaBar
-                label="Budget"
-                used={currentUser.usage.usd_spent}
-                total={currentUser.package.usd_budget}
-                unit="USD"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-baseline mb-1">
-                  <span className="text-xs text-zinc-400">Rate Limit</span>
-                  <span className="text-xs text-zinc-500">{currentUser.package.rpm_limit} RPM</span>
-                </div>
-                {currentUser.package.allowed_models.length > 0 && (
-                  <p className="text-xs text-zinc-600 mt-0.5">
-                    Models: {currentUser.package.allowed_models.join(', ')}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

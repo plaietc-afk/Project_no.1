@@ -7,32 +7,6 @@ import { authApi, type AuthUser } from "../../lib/auth";
 function fmt$(n: number) { return n.toFixed(n < 0.01 ? 4 : 2); }
 function fmtK(n: number) { return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}K` : String(n); }
 
-function QuotaBar({ label, used, total, format }: { label: string; used: number; total: number; format: "tokens" | "usd" }) {
-  const unlimited = total === 0;
-  const pct = unlimited ? 0 : Math.min(100, (used / total) * 100);
-  const color = pct >= 95 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-indigo-500";
-  const usedStr = format === "usd" ? `$${fmt$(used)}` : fmtK(used);
-  const totalStr = format === "usd" ? `$${fmt$(total)}` : fmtK(total);
-  return (
-    <div>
-      <div className="flex justify-between items-baseline mb-2">
-        <span className="text-sm text-zinc-300">{label}</span>
-        <span className="text-sm text-zinc-400">
-          {unlimited ? "Unlimited" : `${usedStr} / ${totalStr}`}
-        </span>
-      </div>
-      {!unlimited && (
-        <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-          <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
-        </div>
-      )}
-      {!unlimited && (
-        <p className="text-xs text-zinc-600 mt-1">{pct.toFixed(1)}% used</p>
-      )}
-    </div>
-  );
-}
-
 export default function ProfilePage() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,8 +46,6 @@ export default function ProfilePage() {
     </div>
   );
 
-  const pkg = user.package;
-
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100">
       <nav className="border-b border-zinc-800 bg-[#09090b]/80 sticky top-0 z-40">
@@ -102,33 +74,26 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Package */}
-        {pkg && (
-          <div className="bg-zinc-900 border border-zinc-800/50 rounded-2xl p-6">
-            <div className="flex justify-between items-start mb-5">
-              <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Package</h2>
-              <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${
-                pkg.name === 'enterprise' ? 'bg-amber-900/40 text-amber-400' :
-                pkg.name === 'pro' ? 'bg-indigo-900/40 text-indigo-400' :
-                'bg-zinc-800 text-zinc-400'
-              }`}>{pkg.display_name}</span>
+        {/* Usage This Month */}
+        <div className="bg-zinc-900 border border-zinc-800/50 rounded-2xl p-6">
+          <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-4">Usage This Month</h2>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-zinc-500 mb-1">Tokens Used</p>
+              <p className="text-white text-lg font-semibold">{fmtK(user.usage.tokens_used)}</p>
             </div>
-            <div className="space-y-5">
-              <QuotaBar label="Token Usage" used={user.usage.tokens_used} total={pkg.token_quota} format="tokens" />
-              <QuotaBar label="Spend" used={user.usage.usd_spent} total={pkg.usd_budget} format="usd" />
-              <div className="flex gap-6 text-sm">
-                <div><p className="text-zinc-500 mb-1">Rate Limit</p><p className="text-white">{pkg.rpm_limit} req/min</p></div>
-                <div>
-                  <p className="text-zinc-500 mb-1">Model Access</p>
-                  <p className="text-white">{pkg.allowed_models.length === 0 ? "All models" : pkg.allowed_models.join(", ")}</p>
-                </div>
-                {user.usage.usage_reset_at && (
-                  <div><p className="text-zinc-500 mb-1">Resets on</p><p className="text-white">{user.usage.usage_reset_at.slice(0, 10)}</p></div>
-                )}
+            <div>
+              <p className="text-zinc-500 mb-1">Cost</p>
+              <p className="text-white text-lg font-semibold">${fmt$(user.usage.usd_spent)}</p>
+            </div>
+            {user.usage.usage_reset_at && (
+              <div>
+                <p className="text-zinc-500 mb-1">Resets on</p>
+                <p className="text-white">{user.usage.usage_reset_at.slice(0, 10)}</p>
               </div>
-            </div>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Change Password */}
         <div className="bg-zinc-900 border border-zinc-800/50 rounded-2xl p-6">

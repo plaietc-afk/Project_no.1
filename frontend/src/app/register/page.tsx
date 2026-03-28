@@ -105,7 +105,7 @@ export default function RegisterPage() {
           </p>
         </div>
         <p className="text-center text-xs text-zinc-600 mt-4">
-          Free plan: 100K tokens · $2 budget · 10 RPM
+          Unlimited AI access · Usage tracked per account
         </p>
       </div>
     </div>

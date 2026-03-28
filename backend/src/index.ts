@@ -113,7 +113,7 @@ const enforcePackageLimits = (req: express.Request, res: express.Response, next:
   if (allowedModels.length > 0 && !allowedModels.some(m => requestedModel.includes(m))) {
     return res.status(403).json({
       success: false,
-      error: `Your ${pkg.name} plan does not allow access to this model. Upgrade to Pro for full model access.`,
+      error: `Your account does not have access to this model. Contact your administrator.`,
       code: 'MODEL_NOT_ALLOWED',
       allowed_models: allowedModels
     });

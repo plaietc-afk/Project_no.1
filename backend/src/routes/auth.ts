@@ -114,7 +114,7 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
 
   const result = db.prepare(
     `INSERT INTO users (email, password_hash, full_name, role, package_id, usage_reset_at)
-     VALUES (?, ?, ?, 'user', 1, ?)`
+     VALUES (?, ?, ?, 'user', 3, ?)`
   ).run(email.toLowerCase(), hash, full_name ?? null, resetAt);
 
   const userId = result.lastInsertRowid as number;
