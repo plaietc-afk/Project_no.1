@@ -290,15 +290,6 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="font-semibold text-white tracking-tight">TokenGuard</span>
-            {currentUser && (
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${
-                currentUser.package?.name === 'enterprise' ? 'bg-amber-900/40 text-amber-400' :
-                currentUser.package?.name === 'pro' ? 'bg-indigo-900/40 text-indigo-400' :
-                'bg-zinc-800 text-zinc-400'
-              }`}>
-                {currentUser.package?.display_name ?? 'Free'}
-              </span>
-            )}
           </div>
           <div className="flex items-center gap-3">
             <select
