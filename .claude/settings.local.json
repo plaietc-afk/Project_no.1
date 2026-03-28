@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(node_modules/.bin/next build:*)",
+      "Bash(timeout 8 npx ts-node src/index.ts)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /PID 36540 /F)",
+      "Bash(cmd.exe /c \"taskkill /PID 36540 /F\")",
+      "Bash(cmd.exe /c \"netstat -ano | findstr :4000\")",
+      "Bash(find /c/TokenGuard/.claude/worktrees/youthful-yalow -name middleware.ts -o -name middleware.js -o -name auth* -type f)",
+      "Bash(find /c/TokenGuard/.claude/worktrees/youthful-yalow -name .env* -type f)",
+      "Bash(find /c/TokenGuard/.claude/worktrees/youthful-yalow -maxdepth 3 -type d -not -path */node_modules*)",
+      "Bash(npm run:*)",
+      "Bash(cmd.exe /c \"for /f \"\"tokens=5\"\" %a in \\(''netstat -aon ^| findstr :4000 ^| findstr LISTENING''\\) do taskkill /PID %a /F\")",
+      "Bash(cmd.exe /c \"netstat -aon | findstr :4000 | findstr LISTENING\")",
+      "Bash(cmd.exe /c \"netstat -aon | findstr :4000\")",
+      "Bash(cmd.exe /c \"tasklist | findstr node\")",
+      "Bash(cmd.exe /c \"powershell -Command \"\"Get-NetTCPConnection -LocalPort 4000 -ErrorAction SilentlyContinue | Select-Object State, OwningProcess | Format-Table -AutoSize\"\"\")",
+      "Bash(cmd.exe /c \"powershell -Command \"\"$listener = [System.Net.Sockets.TcpListener]::new\\([System.Net.IPAddress]::Any, 4000\\); try { $listener.Start\\(\\); Write-Output ''Port 4000 is FREE''; $listener.Stop\\(\\) } catch { Write-Output \"\"Port 4000 is BUSY: $_\" }\"\"\")",
+      "Bash(powershell -Command \"$listener = [System.Net.Sockets.TcpListener]::new\\([System.Net.IPAddress]::Any, 4000\\); try { $listener.Start\\(\\); Write-Output ''Port 4000 is FREE''; $listener.Stop\\(\\) } catch { Write-Output \"\"Port 4000 is BUSY: $_\" }\")",
+      "Bash(powershell -Command \"try { $l = New-Object System.Net.Sockets.TcpListener\\([System.Net.IPAddress]::Any, 4000\\); $l.Start\\(\\); ''FREE''; $l.Stop\\(\\) } catch { ''BUSY: '' + $_Exception.Message }\")",
+      "Bash(node -e \"const net=require\\(''net''\\);const s=net.createServer\\(\\);s.listen\\(4000,\\(\\)=>{console.log\\(''FREE''\\);s.close\\(\\)}\\).on\\(''error'',e=>console.log\\(''BUSY:''+e.message\\)\\)\")",
+      "Bash(powershell -Command \"Get-NetTCPConnection | Where-Object {$_LocalPort -eq 4000} | Select-Object LocalAddress, LocalPort, State, OwningProcess | Format-Table -AutoSize\")",
+      "Bash(cmd /c \"taskkill /PID 36540 /F\")",
+      "Bash(cmd /c \"tasklist /FI \"\"PID eq 36540\"\"\")",
+      "Bash(cmd /c \"tasklist\")",
+      "Bash(cmd /c \"wmic process where ProcessId=36540 get ProcessId,Name,CommandLine 2>&1\")",
+      "Bash(cmd /c \"powershell -ExecutionPolicy Bypass -Command \"\"Get-Process | Where-Object Id -eq 36540\"\"\")",
+      "Bash(cmd /c \"powershell -ExecutionPolicy Bypass -Command \"\"Get-Process -Name node -ErrorAction SilentlyContinue | Select-Object Id,Name,Path | Format-Table -AutoSize\"\"\")",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"Get-Process -Id 36540 -ErrorAction SilentlyContinue | Format-List Id,Name,Path\")",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"Get-Process -Id 36540 | Select-Object -ExpandProperty CommandLine\")",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"Stop-Process -Id 36540 -Force; Write-Output ''killed''\")"
+    ]
+  }
+}

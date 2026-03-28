@@ -285,10 +285,10 @@ app.post('/v1/chat/completions', authenticateAndLoadKey, enforcePackageLimits, r
 // ---- Public auth routes ----
 app.use('/auth', authRouter);
 
-// ---- Protected management routes ----
-app.use('/api/keys', requireAuth, keysRouter);
-app.use('/api/stats', requireAuth, analyticsRouter);
-app.use('/api/admin', requireAuth, adminRouter);
+// ---- Management routes (open — self-hosted, protect via network/firewall) ----
+app.use('/api/keys', keysRouter);
+app.use('/api/stats', analyticsRouter);
+app.use('/api/admin', adminRouter);
 
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));

@@ -2,12 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import {
   keysApi, statsApi,
   type ApiKey, type OverviewStats, type ProviderStat, type DailyStat, type HeatmapData, type CreateKeyPayload
 } from "../lib/api";
-import { authApi, type AuthUser } from "../lib/auth";
 
 const PROVIDERS = ["openai", "anthropic", "gemini", "groq", "azure", "cohere", "mistral", "bedrock"];
 
@@ -228,8 +226,6 @@ function NewKeyModal({ onClose, onCreate }: { onClose: () => void; onCreate: (ke
 
 // ---- Main Dashboard ----
 export default function Dashboard() {
-  const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [overview, setOverview] = useState<OverviewStats | null>(null);
   const [providerStats, setProviderStats] = useState<ProviderStat[]>([]);
@@ -243,15 +239,13 @@ export default function Dashboard() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [meRes, keysRes, overviewRes, provRes, dailyRes, heatRes] = await Promise.allSettled([
-        authApi.me(),
+      const [keysRes, overviewRes, provRes, dailyRes, heatRes] = await Promise.allSettled([
         keysApi.list(1, 100),
         statsApi.overview(days),
         statsApi.byProvider(days),
         statsApi.daily(days),
         statsApi.heatmap()
       ]);
-      if (meRes.status === 'fulfilled') setCurrentUser(meRes.value.data);
       if (keysRes.status === 'fulfilled') setKeys(keysRes.value.data);
       if (overviewRes.status === 'fulfilled') setOverview(overviewRes.value.data);
       if (provRes.status === 'fulfilled') setProviderStats(provRes.value.data);
@@ -261,11 +255,6 @@ export default function Dashboard() {
       setLoading(false);
     }
   }, [days]);
-
-  const handleLogout = async () => {
-    await authApi.logout().catch(() => {});
-    router.push("/login");
-  };
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -308,19 +297,6 @@ export default function Dashboard() {
             >
               + New Key
             </button>
-            {currentUser && (
-              <div className="flex items-center gap-2">
-                <a href="/profile" className="text-sm text-zinc-400 hover:text-white transition-colors hidden md:block">
-                  {currentUser.full_name ?? currentUser.email}
-                </a>
-                <button
-                  onClick={handleLogout}
-                  className="text-xs px-3 py-1.5 border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white rounded-lg transition-colors"
-                >
-                  Sign out
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </nav>
