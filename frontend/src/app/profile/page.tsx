@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { authApi, type AuthUser } from "../../lib/auth";
 
 function fmt$(n: number) { return n.toFixed(n < 0.01 ? 4 : 2); }
@@ -78,7 +79,7 @@ export default function ProfilePage() {
       <nav className="border-b border-zinc-800 bg-[#09090b]/80 sticky top-0 z-40">
         <div className="max-w-3xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <a href="/" className="text-zinc-500 hover:text-white text-sm transition-colors">← Dashboard</a>
+            <Link href="/" className="text-zinc-500 hover:text-white text-sm transition-colors">← Dashboard</Link>
           </div>
           <span className="font-semibold text-white tracking-tight">Profile</span>
           <div className="w-24" />
