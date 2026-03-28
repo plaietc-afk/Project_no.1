@@ -1,0 +1,135 @@
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+
+async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    ...options
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
+  return json as T;
+}
+
+// ---- Types ----
+
+export interface ApiKey {
+  id: number;
+  key_name: string;
+  provider: string;
+  budget: number;
+  project_id: string | null;
+  webhook_url: string | null;
+  alert_thresholds: number[];
+  last_alert_percentage: number;
+  rpm_limit: number;
+  tpm_limit: number;
+  is_active: boolean;
+  router_config: Array<{ provider: string; model: string }> | null;
+  created_at: string;
+  key_prefix: string;
+  api_key?: string; // only present on creation
+}
+
+export interface CreateKeyPayload {
+  key_name: string;
+  provider: string;
+  budget?: number;
+  project_id?: string;
+  webhook_url?: string;
+  alert_thresholds?: number[];
+  rpm_limit?: number;
+  tpm_limit?: number;
+  router_config?: Array<{ provider: string; model: string }>;
+}
+
+export interface PageMeta {
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
+export interface OverviewStats {
+  total_tokens: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_cost_usd: number;
+  total_cost_saved_usd: number;
+  total_requests: number;
+  cached_requests: number;
+  from: string;
+  to: string;
+}
+
+export interface ProviderStat {
+  provider: string;
+  total_tokens: number;
+  total_cost_usd: number;
+  total_requests: number;
+}
+
+export interface DailyStat {
+  date: string;
+  total_tokens: number;
+  total_cost_usd: number;
+  total_requests: number;
+}
+
+export interface HeatmapDay {
+  date: string;
+  total_tokens: number;
+  total_requests: number;
+  intensity: number; // 0-4
+}
+
+export interface HeatmapData {
+  year: number;
+  days: HeatmapDay[];
+  max_tokens: number;
+}
+
+// ---- API functions ----
+
+export const keysApi = {
+  list: (page = 1, limit = 20) =>
+    apiFetch<{ success: boolean; data: ApiKey[]; meta: PageMeta }>(`/api/keys?page=${page}&limit=${limit}`),
+
+  create: (payload: CreateKeyPayload) =>
+    apiFetch<{ success: boolean; data: ApiKey }>('/api/keys', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+
+  update: (id: number, payload: Partial<CreateKeyPayload>) =>
+    apiFetch<{ success: boolean; data: ApiKey }>(`/api/keys/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    }),
+
+  revoke: (id: number) =>
+    apiFetch<{ success: boolean; message: string }>(`/api/keys/${id}`, { method: 'DELETE' }),
+
+  rotate: (id: number) =>
+    apiFetch<{ success: boolean; api_key: string; message: string }>(`/api/keys/${id}/rotate`, { method: 'POST' }),
+
+  testWebhook: (webhookUrl: string) =>
+    apiFetch<{ success: boolean; status: number }>('/api/keys/test-webhook', {
+      method: 'POST',
+      body: JSON.stringify({ webhook_url: webhookUrl })
+    })
+};
+
+export const statsApi = {
+  overview: (days = 30) =>
+    apiFetch<{ success: boolean; data: OverviewStats }>(`/api/stats/overview?days=${days}`),
+
+  byProvider: (days = 30) =>
+    apiFetch<{ success: boolean; data: ProviderStat[] }>(`/api/stats/by-provider?days=${days}`),
+
+  daily: (days = 30) =>
+    apiFetch<{ success: boolean; data: DailyStat[] }>(`/api/stats/daily?days=${days}`),
+
+  heatmap: (year?: number) =>
+    apiFetch<{ success: boolean; data: HeatmapData }>(`/api/stats/heatmap${year ? `?year=${year}` : ''}`)
+};
