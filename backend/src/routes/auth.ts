@@ -3,10 +3,20 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { z } from 'zod';
+import rateLimit from 'express-rate-limit';
 import db from '../db';
 import { requireAuth } from '../middleware/requireAuth';
 
 const router = Router();
+
+// 10 attempts per 15 minutes per IP for sensitive auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many attempts. Please try again in 15 minutes.', code: 'RATE_LIMIT' }
+});
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -17,7 +27,7 @@ const COOKIE_OPTS = {
 
 function issueTokens(userId: number) {
   const secret = process.env.JWT_SECRET!;
-  const refreshSecret = process.env.JWT_REFRESH_SECRET ?? secret + '_refresh';
+  const refreshSecret = process.env.JWT_REFRESH_SECRET!;
   const access = jwt.sign({ userId }, secret, { expiresIn: '15m' });
   const refresh = jwt.sign({ userId }, refreshSecret, { expiresIn: '7d' });
   return { access, refresh };
@@ -82,7 +92,7 @@ function formatUser(user: UserRow, pkg: PackageRow | undefined) {
 }
 
 // POST /auth/register
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', authLimiter, async (req: Request, res: Response) => {
   const schema = z.object({
     email: z.string().email(),
     password: z.string().min(8, 'Password must be at least 8 characters'),
@@ -137,7 +147,7 @@ router.post('/register', async (req: Request, res: Response) => {
 });
 
 // POST /auth/login
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', authLimiter, async (req: Request, res: Response) => {
   const schema = z.object({
     email: z.string().email(),
     password: z.string().min(1)
@@ -175,14 +185,14 @@ router.post('/logout', (_req: Request, res: Response) => {
 });
 
 // POST /auth/refresh
-router.post('/refresh', (req: Request, res: Response) => {
+router.post('/refresh', authLimiter, (req: Request, res: Response) => {
   const cookieHeader = req.headers.cookie ?? '';
   const match = cookieHeader.match(/refresh_token=([^;]+)/);
   const token = match ? decodeURIComponent(match[1]) : null;
   if (!token) return res.status(401).json({ success: false, error: 'No refresh token' });
 
   const secret = process.env.JWT_SECRET!;
-  const refreshSecret = process.env.JWT_REFRESH_SECRET ?? secret + '_refresh';
+  const refreshSecret = process.env.JWT_REFRESH_SECRET!;
   try {
     const payload = jwt.verify(token, refreshSecret) as { userId: number };
     const { access, refresh } = issueTokens(payload.userId);
@@ -198,7 +208,8 @@ router.post('/refresh', (req: Request, res: Response) => {
 router.get('/me', requireAuth, (req: Request, res: Response) => {
   const user = req.currentUser!;
   const pkg = db.prepare('SELECT * FROM packages WHERE id = ?').get(user.package_id) as PackageRow | undefined;
-  const userFull = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id) as UserRow;
+  // Re-fetch to get latest usage stats (no password_hash needed here)
+  const userFull = db.prepare('SELECT id, email, role, full_name, package_id, tokens_used, usd_spent, usage_reset_at, is_active, created_at FROM users WHERE id = ?').get(user.id) as UserRow;
   return res.json({ success: true, data: formatUser(userFull, pkg) });
 });
 

@@ -14,9 +14,9 @@ import { requireAuth } from './middleware/requireAuth';
 
 dotenv.config();
 
-// Fail fast if JWT_SECRET is missing
-if (!process.env.JWT_SECRET) {
-  console.error('[FATAL] JWT_SECRET environment variable is not set. Please add it to your .env file.');
+// Fail fast if required secrets are missing
+if (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET) {
+  process.stderr.write('[FATAL] JWT_SECRET and JWT_REFRESH_SECRET must be set. Generate with: openssl rand -hex 64\n');
   process.exit(1);
 }
 
@@ -71,7 +71,7 @@ const authenticateAndLoadKey = (req: express.Request, res: express.Response, nex
 
   // Load user and package if key has a user_id
   if (apiKeyRecord.user_id) {
-    const user = db.prepare('SELECT * FROM users WHERE id = ? AND is_active = 1').get(apiKeyRecord.user_id) as UserRow | undefined;
+    const user = db.prepare('SELECT id, email, role, package_id, tokens_used, usd_spent, usage_reset_at, is_active FROM users WHERE id = ? AND is_active = 1').get(apiKeyRecord.user_id) as UserRow | undefined;
     if (user) {
       const pkg = db.prepare('SELECT * FROM packages WHERE id = ?').get(user.package_id) as PackageRow | undefined;
       (req as express.Request & { proxyUser?: UserRow; proxyPackage?: PackageRow }).proxyUser = user;
@@ -83,29 +83,29 @@ const authenticateAndLoadKey = (req: express.Request, res: express.Response, nex
 };
 
 // ---- Middleware: Check monthly usage reset ----
-function maybeResetUsage(user: UserRow) {
-  if (!user.usage_reset_at) return;
+// Returns the (possibly updated) user row — never mutates the input object.
+function maybeResetUsage(user: UserRow): UserRow {
+  if (!user.usage_reset_at) return user;
   const resetAt = new Date(user.usage_reset_at);
-  if (new Date() >= resetAt) {
-    const nextReset = new Date();
-    nextReset.setMonth(nextReset.getMonth() + 1);
-    nextReset.setDate(1);
-    nextReset.setHours(0, 0, 0, 0);
-    db.prepare('UPDATE users SET tokens_used = 0, usd_spent = 0, usage_reset_at = ? WHERE id = ?')
-      .run(nextReset.toISOString().replace('T', ' ').slice(0, 19), user.id);
-    user.tokens_used = 0;
-    user.usd_spent = 0;
-  }
+  if (new Date() < resetAt) return user;
+
+  const nextReset = new Date();
+  nextReset.setMonth(nextReset.getMonth() + 1);
+  nextReset.setDate(1);
+  nextReset.setHours(0, 0, 0, 0);
+  db.prepare('UPDATE users SET tokens_used = 0, usd_spent = 0, usage_reset_at = ? WHERE id = ?')
+    .run(nextReset.toISOString().replace('T', ' ').slice(0, 19), user.id);
+  return { ...user, tokens_used: 0, usd_spent: 0 };
 }
 
 // ---- Middleware: Enforce package limits ----
 const enforcePackageLimits = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const r = req as express.Request & { proxyUser?: UserRow; proxyPackage?: PackageRow };
-  const user = r.proxyUser;
   const pkg = r.proxyPackage;
-  if (!user || !pkg) return next(); // no user context → fall through to per-key limits
+  if (!r.proxyUser || !pkg) return next(); // no user context → fall through to per-key limits
 
-  maybeResetUsage(user);
+  const user = maybeResetUsage(r.proxyUser);
+  r.proxyUser = user;
 
   // 1. Model access control
   const allowedModels: string[] = JSON.parse(pkg.allowed_models || '[]');
@@ -277,7 +277,8 @@ app.post('/v1/chat/completions', authenticateAndLoadKey, enforcePackageLimits, r
       if (err instanceof RouterExhaustedError) {
         return res.status(503).json({ success: false, error: 'All providers failed', attempts: err.attempts });
       }
-      return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
+      process.stderr.write(`[proxy error] ${err instanceof Error ? err.message : String(err)}\n`);
+      return res.status(500).json({ success: false, error: 'Internal proxy error. Please try again.' });
     }
   });
 

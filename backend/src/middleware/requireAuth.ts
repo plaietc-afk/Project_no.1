@@ -48,7 +48,7 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
 
   try {
     const payload = jwt.verify(token, secret) as { userId: number };
-    const user = db.prepare('SELECT * FROM users WHERE id = ? AND is_active = 1').get(payload.userId) as AuthUser | undefined;
+    const user = db.prepare('SELECT id, email, role, full_name, package_id, tokens_used, usd_spent, usage_reset_at, is_active, created_at FROM users WHERE id = ? AND is_active = 1').get(payload.userId) as AuthUser | undefined;
     if (!user) {
       return res.status(401).json({ success: false, error: 'User not found or deactivated', code: 'UNAUTHENTICATED' });
     }
@@ -78,7 +78,7 @@ export const optionalAuth = (req: Request, _res: Response, next: NextFunction) =
 
   try {
     const payload = jwt.verify(token, secret) as { userId: number };
-    const user = db.prepare('SELECT * FROM users WHERE id = ? AND is_active = 1').get(payload.userId) as AuthUser | undefined;
+    const user = db.prepare('SELECT id, email, role, full_name, package_id, tokens_used, usd_spent, usage_reset_at, is_active, created_at FROM users WHERE id = ? AND is_active = 1').get(payload.userId) as AuthUser | undefined;
     if (user) req.currentUser = user;
   } catch { /* ignore */ }
   next();

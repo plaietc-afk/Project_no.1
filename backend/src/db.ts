@@ -120,12 +120,14 @@ if (packageCount === 0) {
 // ---- Seed admin user ----
 const userCount = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c;
 if (userCount === 0) {
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@tokenguard.local';
-  const adminPassword = process.env.ADMIN_PASSWORD || 'changeme123';
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminEmail || !adminPassword) {
+    throw new Error('[FATAL] ADMIN_EMAIL and ADMIN_PASSWORD must be set in environment before first run.');
+  }
   const hash = bcrypt.hashSync(adminPassword, 12);
   db.prepare(`INSERT INTO users (email, password_hash, full_name, role, package_id) VALUES (?, ?, ?, 'admin', 3)`)
     .run(adminEmail, hash, 'Admin');
-  console.log(`[DB] Admin user created: ${adminEmail}`);
 }
 
 export default db;
