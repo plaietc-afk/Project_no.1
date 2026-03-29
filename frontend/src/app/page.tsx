@@ -62,6 +62,19 @@ export default function Dashboard() {
     setDrillDownKey(key);
   }, []);
 
+  const handleExportCsv = useCallback(() => {
+    const rows = ["date,tokens,cost_usd", ...dailyStats.map(d => `${d.date},${d.total_tokens},${d.total_cost_usd}`)];
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tokenguard-daily-cost-${days}d.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [dailyStats, days]);
+
   const activeKeys = keys.filter(k => k.is_active).length;
 
   const now = new Date();
@@ -164,18 +177,10 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-zinc-300">Daily Cost (USD)</h2>
               {dailyStats.length > 0 && (
                 <button
-                  onClick={() => {
-                    const rows = ["date,tokens,cost_usd", ...dailyStats.map(d => `${d.date},${d.total_tokens},${d.total_cost_usd}`)];
-                    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `tokenguard-daily-cost-${days}d.csv`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
+                  onClick={handleExportCsv}
                   className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
                   title="Export as CSV"
+                  aria-label="Export daily cost data as CSV"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
