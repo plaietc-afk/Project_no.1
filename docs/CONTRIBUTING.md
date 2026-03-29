@@ -29,6 +29,8 @@ cd ../frontend && npm install
 Start both servers (each in a separate terminal):
 
 <!-- AUTO-GENERATED from backend/package.json + frontend/package.json -->
+**Last Updated: 2026-03-30**
+
 ### Backend Commands
 
 | Command | Description |
@@ -44,6 +46,9 @@ Start both servers (each in a separate terminal):
 | `npm run build` | Production build with type checking |
 | `npm run start` | Serve production build |
 | `npm run lint` | Run ESLint |
+| `npm run test` | Run tests (Vitest) |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run test:coverage` | Generate test coverage report |
 <!-- END AUTO-GENERATED -->
 
 ## Code Style
@@ -101,10 +106,15 @@ frontend/src/
 
 ### New Features (Recent Updates)
 
-1. **Budget Bars** — `KeysTable` displays budget utilization (green → amber → red at 70%/90%)
-2. **Monthly Forecast** — StatCard projects end-of-month cost from daily average
-3. **CSV Export** — Download daily cost data from the BarChart header
-4. **keyStats Hook Return** — `useDashboard()` now returns `keyStats: KeyStat[]` for per-key breakdown
+1. **Multi-User Support** — Create named users with `POST /api/users`, filter all stats by user with `?user_id=N` query param
+2. **Latency Analytics** — New `GET /api/stats/latency` endpoint shows P50/P95/average latency per provider
+3. **Cost Comparison Tool** — `GET /api/stats/cost-comparison` lets users compare pricing across models in a class
+4. **SSE Streaming Proxy** — Request with `"stream": true` in body for streaming responses (OpenAI SSE format)
+5. **User-Scoped Endpoints** — All stats endpoints support optional `?user_id=N` to track individual user usage
+6. **Budget Bars** — `KeysTable` displays budget utilization (green → amber → red at 70%/90%)
+7. **Monthly Forecast** — StatCard projects end-of-month cost from daily average
+8. **CSV Export** — Download daily cost data from the BarChart header
+9. **keyStats Hook Return** — `useDashboard()` now returns `keyStats: KeyStat[]` for per-key breakdown
 
 ## Adding a New AI Provider
 

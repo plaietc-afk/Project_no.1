@@ -55,7 +55,42 @@ TokenGuard is an open-access self-hosted tool — there are no usage tiers or qu
 All users default to the Enterprise package (unlimited tokens, unlimited spend, all models).
 
 Per-key limits (RPM, TPM, USD budget) can still be configured on individual API keys for governance.
-Manage users via the admin API (`/api/admin`).
+
+### Multi-User Tracking
+
+Create named users to track usage per team member, project, or tenant:
+
+```bash
+# Create a named user
+curl -X POST http://localhost:4000/api/users \
+  -H "Content-Type: application/json" \
+  -d '{ "display_name": "Alice" }'
+
+# Filter any stats endpoint by user
+curl http://localhost:4000/api/stats/overview?user_id=1&days=30
+curl http://localhost:4000/api/stats/by-user?days=30  # All users' breakdown
+```
+
+Manage users via the `/api/users` endpoints (open access) or the admin API (`/api/admin`).
+
+---
+
+## Streaming Responses
+
+TokenGuard proxies OpenAI-compatible streaming requests (SSE format). Send `"stream": true` in the request body:
+
+```bash
+curl -X POST http://localhost:4000/v1/chat/completions \
+  -H "Authorization: Bearer tg-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "stream": true,
+    "messages": [{ "role": "user", "content": "Hello" }]
+  }'
+```
+
+Usage is automatically logged and attributed to the API key's user (if assigned).
 
 ---
 
@@ -120,6 +155,37 @@ Tables: `packages`, `users`, `api_keys`, `token_logs`, `request_cache`
 2. Restore `backend/data.db` from backup
 3. Checkout the previous git tag / commit
 4. `npm install` and restart
+
+---
+
+## Analytics Features
+
+### Latency Monitoring
+
+Measure provider response times (P50, P95, average):
+
+```bash
+curl http://localhost:4000/api/stats/latency?days=30
+# Response:
+# [
+#   { "provider": "openai", "p50_ms": 245, "p95_ms": 890, "avg_ms": 412, "request_count": 156 },
+#   { "provider": "anthropic", "p50_ms": 320, "p95_ms": 1200, "avg_ms": 550, "request_count": 89 }
+# ]
+```
+
+### Cost Comparison
+
+Compare pricing across all models in a class:
+
+```bash
+# List model classes
+curl http://localhost:4000/api/stats/cost-comparison/classes
+
+# Compare costs for a hypothetical 1M prompt + 300K completion tokens in 'standard' class
+curl http://localhost:4000/api/stats/cost-comparison \
+  ?prompt_tokens=1000000&completion_tokens=300000&model_class=standard
+# Returns sorted list: cheapest first
+```
 
 ---
 

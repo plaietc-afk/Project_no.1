@@ -9,6 +9,7 @@ Base URL: `http://localhost:4000`
 ---
 
 <!-- AUTO-GENERATED from backend/src/routes/ + backend/src/index.ts -->
+Last Updated: 2026-03-30
 
 ## Proxy
 
@@ -64,17 +65,35 @@ No authentication required. All keys are visible to anyone who can reach the ser
 
 ## Analytics (`/api/stats`)
 
-No authentication required.
+No authentication required. All endpoints accept an optional `?user_id=N` query parameter to filter by a specific named user.
 
 | Method | Path | Query params | Description |
 |--------|------|-------------|-------------|
-| `GET` | `/api/stats/overview` | `?days=30` | Aggregate totals (tokens, cost, requests, cache hits) |
-| `GET` | `/api/stats/by-provider` | `?days=30` | Breakdown by AI provider |
-| `GET` | `/api/stats/by-model` | `?days=30` | Breakdown by model |
-| `GET` | `/api/stats/by-key` | `?days=30` | Breakdown by API key |
-| `GET` | `/api/stats/daily` | `?days=30` | Daily time-series data |
-| `GET` | `/api/stats/heatmap` | `?year=2025` | GitHub-style usage heatmap (intensity 0–4) |
-| `GET` | `/api/stats/logs` | `?page=1&limit=50` | Paginated request log |
+| `GET` | `/api/stats/overview` | `?days=30&user_id=N` | Aggregate totals (tokens, cost, requests, cache hits) |
+| `GET` | `/api/stats/by-provider` | `?days=30&user_id=N` | Breakdown by AI provider |
+| `GET` | `/api/stats/by-model` | `?days=30&user_id=N` | Breakdown by model |
+| `GET` | `/api/stats/by-key` | `?days=30&user_id=N` | Breakdown by API key |
+| `GET` | `/api/stats/daily` | `?days=30&user_id=N` | Daily time-series data |
+| `GET` | `/api/stats/heatmap` | `?year=2025&user_id=N` | GitHub-style usage heatmap (intensity 0–4) |
+| `GET` | `/api/stats/by-user` | `?days=30` | Breakdown by named user (email/display_name, tokens, cost) |
+| `GET` | `/api/stats/latency` | `?days=30&user_id=N` | Provider latency statistics (P50, P95, average ms, request count) |
+| `GET` | `/api/stats/cost-comparison/classes` | None | List available model classes for cost comparison |
+| `GET` | `/api/stats/cost-comparison` | `?prompt_tokens=N&completion_tokens=N&model_class=standard` | Cost breakdown by model within a class |
+| `GET` | `/api/stats/logs` | `?page=1&limit=50&user_id=N&key_id=N` | Paginated request log |
+
+---
+
+## Users (`/api/users`)
+
+No authentication required. Create or manage named users (for tracking usage per team member, project, etc.).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/users` | List all named users |
+| `POST` | `/api/users` | Create a named user from `{ display_name: "Alice" }` |
+| `GET` | `/api/users/:id` | Get user detail |
+| `PUT` | `/api/users/:id` | Update user from `{ display_name: "Alice Updated" }` |
+| `DELETE` | `/api/users/:id` | Delete user (only if no active API keys) |
 
 ---
 
