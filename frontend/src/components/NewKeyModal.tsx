@@ -3,7 +3,24 @@
 import { useState } from "react";
 import { keysApi, type ApiKey, type CreateKeyPayload } from "../lib/api";
 
-const PROVIDERS = ["openai", "anthropic", "gemini", "groq", "azure", "cohere", "mistral", "bedrock"];
+const PROVIDERS = ["openai", "anthropic", "gemini", "groq", "azure", "cohere", "mistral", "bedrock"] as const;
+
+function validateForm(form: { key_name: string; provider: string; budget: number; webhook_url: string; rpm_limit: number; tpm_limit: number }): string | null {
+  if (!form.key_name.trim()) return "Key name is required";
+  if (!(PROVIDERS as readonly string[]).includes(form.provider)) return "Invalid provider";
+  if (form.budget < 0) return "Budget must be 0 or greater";
+  if (form.rpm_limit < 0) return "RPM limit must be 0 or greater";
+  if (form.tpm_limit < 0) return "TPM limit must be 0 or greater";
+  if (form.webhook_url && form.webhook_url.trim()) {
+    try {
+      const url = new URL(form.webhook_url.trim());
+      if (url.protocol !== "https:") return "Webhook URL must use HTTPS";
+    } catch {
+      return "Webhook URL is not a valid URL";
+    }
+  }
+  return null;
+}
 
 const inputCls = "w-full px-3 py-2 bg-zinc-900 border border-zinc-800 text-white rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm placeholder:text-zinc-600";
 const labelCls = "block text-xs font-medium text-zinc-400 mb-1.5 uppercase tracking-wider";
@@ -81,7 +98,15 @@ export function NewKeyModal({ onClose, onCreate }: NewKeyModalProps) {
   };
 
   const handleSubmit = async () => {
-    if (!form.key_name.trim()) return;
+    const validationError = validateForm({
+      key_name: form.key_name,
+      provider: form.provider,
+      budget: form.budget ?? 0,
+      webhook_url: form.webhook_url ?? "",
+      rpm_limit: form.rpm_limit ?? 0,
+      tpm_limit: form.tpm_limit ?? 0,
+    });
+    if (validationError) { setError(validationError); return; }
     setLoading(true);
     setError(null);
     try {

@@ -1,6 +1,5 @@
 import type { ProviderStat } from "../lib/api";
-
-function fmt$(n: number) { return n.toFixed(n < 0.01 ? 4 : 2); }
+import { fmt$ } from "../lib/format";
 
 const COLORS = ["#6366f1", "#22d3ee", "#f59e0b", "#10b981", "#f43f5e", "#a78bfa", "#34d399", "#fb923c"];
 

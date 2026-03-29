@@ -10,9 +10,7 @@ import { ActivityHeatmap } from "../components/ActivityHeatmap";
 import { NewKeyModal } from "../components/NewKeyModal";
 import { KeysTable } from "../components/KeysTable";
 import { useToast, ToastContainer } from "../components/Toast";
-
-function fmt$(n: number) { return n.toFixed(n < 0.01 ? 4 : 2); }
-function fmtK(n: number) { return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}K` : String(n); }
+import { fmt$, fmtK } from "../lib/format";
 
 // ---- Icons ----
 const IconCost = () => (
@@ -46,7 +44,7 @@ const IconRefresh = () => (
 export default function Dashboard() {
   const [days, setDays] = useState(30);
   const [showNewKey, setShowNewKey] = useState(false);
-  const { keys, overview, providerStats, dailyStats, heatmap, loading, refresh, revokeKey, addKey } = useDashboard(days);
+  const { keys, overview, providerStats, dailyStats, heatmap, loading, error, refresh, revokeKey, addKey } = useDashboard(days);
   const { toasts, push: pushToast, dismiss: dismissToast } = useToast();
 
   const activeKeys = keys.filter(k => k.is_active).length;
@@ -85,6 +83,18 @@ export default function Dashboard() {
           </div>
         </div>
       </nav>
+
+      {error && (
+        <div className="bg-red-900/20 border-b border-red-700/30 px-6 py-3">
+          <div className="max-w-7xl mx-auto flex items-center gap-3 text-sm text-red-400">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><circle cx="12" cy="16" r=".5" fill="currentColor" />
+            </svg>
+            <span className="flex-1">{error}</span>
+            <button onClick={() => refresh()} className="underline hover:no-underline">Retry</button>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Stats Row */}

@@ -1,13 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import type { ApiKey } from "../lib/api";
 import { keysApi } from "../lib/api";
 import { ConfirmDialog } from "./ConfirmDialog";
 import type { ToastType } from "./Toast";
-
-function fmt$(n: number) { return n.toFixed(n < 0.01 ? 4 : 2); }
-function fmtK(n: number) { return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}K` : String(n); }
+import { fmt$, fmtK } from "../lib/format";
 
 const PROVIDERS = ["openai", "anthropic", "gemini", "groq", "azure", "cohere", "mistral", "bedrock"];
 
@@ -21,7 +19,7 @@ interface KeysTableProps {
 
 function statusLabel(k: ApiKey) {
   if (!k.is_active) return { label: "Revoked", cls: "bg-zinc-700/50 text-zinc-400 border-zinc-600/30" };
-  if (k.budget > 0) return { label: "Active", cls: "bg-emerald-900/40 text-emerald-400 border-emerald-600/20" };
+  if (k.budget > 0) return { label: "Budgeted", cls: "bg-blue-900/40 text-blue-400 border-blue-600/20" };
   return { label: "Active", cls: "bg-emerald-900/40 text-emerald-400 border-emerald-600/20" };
 }
 
@@ -107,6 +105,32 @@ export function KeysTable({ keys, loading, onRevoke, onToast, onRotated }: KeysT
 
   const handleTestWebhook = async (k: ApiKey) => {
     if (!k.webhook_url) return;
+
+    // Client-side SSRF guard: only allow HTTPS URLs to public-looking hosts
+    try {
+      const url = new URL(k.webhook_url);
+      if (url.protocol !== "https:") {
+        onToast("Webhook URL must use HTTPS", "error");
+        return;
+      }
+      // Block loopback / link-local / private ranges at the client layer
+      const hostname = url.hostname.toLowerCase();
+      const isPrivate =
+        hostname === "localhost" ||
+        hostname.startsWith("127.") ||
+        hostname.startsWith("10.") ||
+        hostname.startsWith("192.168.") ||
+        hostname === "::1" ||
+        hostname.startsWith("169.254.");
+      if (isPrivate) {
+        onToast("Webhook URL must not target a private/loopback address", "error");
+        return;
+      }
+    } catch {
+      onToast("Webhook URL is not a valid URL", "error");
+      return;
+    }
+
     setTestingWebhook(k.id);
     try {
       await keysApi.testWebhook(k.webhook_url);
@@ -173,69 +197,70 @@ export function KeysTable({ keys, loading, onRevoke, onToast, onRotated }: KeysT
                     </div>
                   </td>
                 </tr>
-              ) : filteredKeys.flatMap(k => {
+              ) : filteredKeys.map(k => {
                 const { label, cls } = statusLabel(k);
                 const rotatedKey = rotatedKeys[k.id];
-                const rows = [];
 
-                if (rotatedKey) {
-                  rows.push(<RotatedKeyBanner key={`banner-${k.id}`} keyValue={rotatedKey} onDismiss={() => setRotatedKeys(prev => { const next = { ...prev }; delete next[k.id]; return next; })} />);
-                }
-
-                rows.push(
-                  <tr key={k.id} className="hover:bg-zinc-800/20 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-white">{k.key_name}</div>
-                      {k.project_id && <div className="text-xs text-zinc-500 mt-0.5">{k.project_id}</div>}
-                    </td>
-                    <td className="px-6 py-4 font-mono text-zinc-400 text-xs">{k.key_prefix}…</td>
-                    <td className="px-6 py-4 capitalize text-zinc-300">{k.provider}</td>
-                    <td className="px-6 py-4 text-zinc-300">{k.budget > 0 ? `$${fmt$(k.budget)}` : "—"}</td>
-                    <td className="px-6 py-4 text-zinc-500 text-xs">
-                      {[
-                        k.rpm_limit > 0 ? `${k.rpm_limit} RPM` : "",
-                        k.tpm_limit > 0 ? `${fmtK(k.tpm_limit)} TPM` : ""
-                      ].filter(Boolean).join(" / ") || "—"}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${cls}`}>{label}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        {k.is_active && (
-                          <>
-                            <button
-                              onClick={() => handleRotate(k)}
-                              disabled={rotating === k.id}
-                              className="text-xs text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
-                              title="Rotate key"
-                            >
-                              {rotating === k.id ? "..." : "Rotate"}
-                            </button>
-                            {k.webhook_url && (
+                return (
+                  <Fragment key={k.id}>
+                    {rotatedKey && (
+                      <RotatedKeyBanner
+                        keyValue={rotatedKey}
+                        onDismiss={() => setRotatedKeys(prev => { const next = { ...prev }; delete next[k.id]; return next; })}
+                      />
+                    )}
+                    <tr className="hover:bg-zinc-800/20 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-white">{k.key_name}</div>
+                        {k.project_id && <div className="text-xs text-zinc-500 mt-0.5">{k.project_id}</div>}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-zinc-400 text-xs">{k.key_prefix}…</td>
+                      <td className="px-6 py-4 capitalize text-zinc-300">{k.provider}</td>
+                      <td className="px-6 py-4 text-zinc-300">{k.budget > 0 ? `$${fmt$(k.budget)}` : "—"}</td>
+                      <td className="px-6 py-4 text-zinc-500 text-xs">
+                        {[
+                          k.rpm_limit > 0 ? `${k.rpm_limit} RPM` : "",
+                          k.tpm_limit > 0 ? `${fmtK(k.tpm_limit)} TPM` : ""
+                        ].filter(Boolean).join(" / ") || "—"}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${cls}`}>{label}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          {k.is_active && (
+                            <>
                               <button
-                                onClick={() => handleTestWebhook(k)}
-                                disabled={testingWebhook === k.id}
+                                onClick={() => handleRotate(k)}
+                                disabled={rotating === k.id}
                                 className="text-xs text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
-                                title="Test webhook"
+                                title="Rotate key"
                               >
-                                {testingWebhook === k.id ? "..." : "Test"}
+                                {rotating === k.id ? "..." : "Rotate"}
                               </button>
-                            )}
-                            <button
-                              onClick={() => setRevokeTarget(k)}
-                              className="text-xs text-red-500 hover:text-red-400 transition-colors"
-                            >
-                              Revoke
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                              {k.webhook_url && (
+                                <button
+                                  onClick={() => handleTestWebhook(k)}
+                                  disabled={testingWebhook === k.id}
+                                  className="text-xs text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
+                                  title="Test webhook"
+                                >
+                                  {testingWebhook === k.id ? "..." : "Test"}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setRevokeTarget(k)}
+                                className="text-xs text-red-500 hover:text-red-400 transition-colors"
+                              >
+                                Revoke
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  </Fragment>
                 );
-
-                return rows;
               })}
             </tbody>
           </table>

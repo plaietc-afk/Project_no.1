@@ -5,23 +5,21 @@ import { useState, useCallback, useEffect } from "react";
 export type ToastType = "success" | "error" | "info";
 
 interface Toast {
-  id: number;
+  id: string;
   message: string;
   type: ToastType;
 }
-
-let nextId = 0;
 
 export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const push = useCallback((message: string, type: ToastType = "info") => {
-    const id = ++nextId;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
   }, []);
 
-  const dismiss = useCallback((id: number) => {
+  const dismiss = useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
@@ -54,7 +52,7 @@ const BORDER: Record<ToastType, string> = {
 
 interface ToastContainerProps {
   toasts: Toast[];
-  dismiss: (id: number) => void;
+  dismiss: (id: string) => void;
 }
 
 export function ToastContainer({ toasts, dismiss }: ToastContainerProps) {

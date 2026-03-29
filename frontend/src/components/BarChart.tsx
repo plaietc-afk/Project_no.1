@@ -1,6 +1,5 @@
 import type { DailyStat } from "../lib/api";
-
-function fmt$(n: number) { return n.toFixed(n < 0.01 ? 4 : 2); }
+import { fmt$ } from "../lib/format";
 
 export function BarChart({ data }: { data: DailyStat[] }) {
   if (!data.length) {
