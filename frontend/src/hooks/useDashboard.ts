@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   keysApi, statsApi,
-  type ApiKey, type OverviewStats, type ProviderStat, type DailyStat, type HeatmapData
+  type ApiKey, type OverviewStats, type ProviderStat, type DailyStat, type HeatmapData, type KeyStat
 } from "../lib/api";
 
 /** Max keys fetched per page — if the org exceeds this, a console warning is emitted */
@@ -15,6 +15,7 @@ export function useDashboard(days: number) {
   const [providerStats, setProviderStats] = useState<ProviderStat[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [heatmap, setHeatmap] = useState<HeatmapData | null>(null);
+  const [keyStats, setKeyStats] = useState<KeyStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,12 +23,13 @@ export function useDashboard(days: number) {
     setLoading(true);
     setError(null);
     try {
-      const [keysRes, overviewRes, provRes, dailyRes, heatRes] = await Promise.allSettled([
+      const [keysRes, overviewRes, provRes, dailyRes, heatRes, keyStatsRes] = await Promise.allSettled([
         keysApi.list(1, KEYS_PAGE_SIZE),
         statsApi.overview(days),
         statsApi.byProvider(days),
         statsApi.daily(days),
-        statsApi.heatmap()
+        statsApi.heatmap(),
+        statsApi.byKey(days),
       ]);
 
       let anyFailed = false;
@@ -52,6 +54,9 @@ export function useDashboard(days: number) {
       if (heatRes.status === "fulfilled") setHeatmap(heatRes.value.data);
       else anyFailed = true;
 
+      if (keyStatsRes.status === "fulfilled") setKeyStats(keyStatsRes.value.data);
+      // keyStats failure is non-critical — don't set anyFailed
+
       if (anyFailed) {
         setError("Some data failed to load. Check that the backend is running and try refreshing.");
       }
@@ -73,5 +78,5 @@ export function useDashboard(days: number) {
     setKeys(prev => [key, ...prev]);
   }, []);
 
-  return { keys, overview, providerStats, dailyStats, heatmap, loading, error, refresh, revokeKey, addKey };
+  return { keys, overview, providerStats, dailyStats, heatmap, keyStats, loading, error, refresh, revokeKey, addKey };
 }

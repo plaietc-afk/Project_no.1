@@ -37,6 +37,11 @@ const IconKeys = () => (
     <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4" />
   </svg>
 );
+const IconForecast = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-400">
+    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" /><polyline points="16 7 22 7 22 13" />
+  </svg>
+);
 const IconRefresh = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
@@ -49,7 +54,7 @@ export default function Dashboard() {
   const [days, setDays] = useState(30);
   const [showNewKey, setShowNewKey] = useState(false);
   const [drillDownKey, setDrillDownKey] = useState<ApiKey | null>(null);
-  const { keys, overview, providerStats, dailyStats, heatmap, loading, error, refresh, revokeKey, addKey } = useDashboard(days);
+  const { keys, overview, providerStats, dailyStats, heatmap, keyStats, loading, error, refresh, revokeKey, addKey } = useDashboard(days);
   const { logs, meta: logsMeta, loading: logsLoading, setPage: setLogsPage } = useRequestLogs();
   const { toasts, push: pushToast, dismiss: dismissToast } = useToast();
 
@@ -58,6 +63,12 @@ export default function Dashboard() {
   }, []);
 
   const activeKeys = keys.filter(k => k.is_active).length;
+
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const forecastUsd = days > 0 && overview
+    ? (overview.total_cost_usd / days) * daysInMonth
+    : null;
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans selection:bg-indigo-500/30">
@@ -108,7 +119,7 @@ export default function Dashboard() {
 
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Stats Row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <StatCard
             label="Total Cost"
             value={`$${fmt$(overview?.total_cost_usd ?? 0)}`}
@@ -137,12 +148,42 @@ export default function Dashboard() {
             icon={<IconKeys />}
             accent="bg-amber-500/10"
           />
+          <StatCard
+            label="Est. Month"
+            value={forecastUsd !== null ? `$${fmt$(forecastUsd)}` : "—"}
+            sub={`Projected (${daysInMonth}-day month)`}
+            icon={<IconForecast />}
+            accent="bg-violet-500/10"
+          />
         </div>
 
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800/50 rounded-2xl p-6">
-            <h2 className="text-sm font-semibold text-zinc-300 mb-4">Daily Cost (USD)</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-zinc-300">Daily Cost (USD)</h2>
+              {dailyStats.length > 0 && (
+                <button
+                  onClick={() => {
+                    const rows = ["date,tokens,cost_usd", ...dailyStats.map(d => `${d.date},${d.total_tokens},${d.total_cost_usd}`)];
+                    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `tokenguard-daily-cost-${days}d.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                  title="Export as CSV"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  CSV
+                </button>
+              )}
+            </div>
             {loading
               ? <div className="h-28 bg-zinc-800 animate-pulse rounded-lg" />
               : <BarChart data={dailyStats} />
@@ -180,6 +221,7 @@ export default function Dashboard() {
         {/* Keys Table */}
         <KeysTable
           keys={keys}
+          keyStats={keyStats}
           loading={loading}
           onRevoke={revokeKey}
           onToast={pushToast}

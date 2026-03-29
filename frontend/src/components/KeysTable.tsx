@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, Fragment } from "react";
-import type { ApiKey } from "../lib/api";
+import type { ApiKey, KeyStat } from "../lib/api";
 import { keysApi } from "../lib/api";
 import { ConfirmDialog } from "./ConfirmDialog";
 import type { ToastType } from "./Toast";
@@ -11,6 +11,7 @@ const PROVIDERS = ["openai", "anthropic", "gemini", "groq", "azure", "cohere", "
 
 interface KeysTableProps {
   keys: ApiKey[];
+  keyStats?: KeyStat[];
   loading: boolean;
   onRevoke: (id: number) => Promise<void>;
   onToast: (msg: string, type?: ToastType) => void;
@@ -63,7 +64,8 @@ function RotatedKeyBanner({ keyValue, onDismiss }: RotatedKeyBannerProps) {
   );
 }
 
-export function KeysTable({ keys, loading, onRevoke, onToast, onRotated, onKeySelect }: KeysTableProps) {
+export function KeysTable({ keys, keyStats = [], loading, onRevoke, onToast, onRotated, onKeySelect }: KeysTableProps) {
+  const keyStatMap = new Map(keyStats.map(s => [s.key_id, s]));
   const [filterProvider, setFilterProvider] = useState("All");
   const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null);
   const [rotatedKeys, setRotatedKeys] = useState<Record<number, string>>({});
@@ -222,7 +224,24 @@ export function KeysTable({ keys, loading, onRevoke, onToast, onRotated, onKeySe
                       </td>
                       <td className="px-6 py-4 font-mono text-zinc-400 text-xs">{k.key_prefix}…</td>
                       <td className="px-6 py-4 capitalize text-zinc-300">{k.provider}</td>
-                      <td className="px-6 py-4 text-zinc-300">{k.budget > 0 ? `$${fmt$(k.budget)}` : "—"}</td>
+                      <td className="px-6 py-4">
+                        {k.budget > 0 ? (() => {
+                          const spent = keyStatMap.get(k.id)?.total_cost_usd ?? 0;
+                          const pct = Math.min((spent / k.budget) * 100, 100);
+                          const barColor = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+                          return (
+                            <div className="min-w-[80px]">
+                              <div className="flex justify-between text-xs text-zinc-400 mb-1">
+                                <span>${fmt$(spent)}</span>
+                                <span className="text-zinc-600">${fmt$(k.budget)}</span>
+                              </div>
+                              <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+                                <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })() : <span className="text-zinc-500">—</span>}
+                      </td>
                       <td className="px-6 py-4 text-zinc-500 text-xs">
                         {[
                           k.rpm_limit > 0 ? `${k.rpm_limit} RPM` : "",
