@@ -76,24 +76,35 @@ cd frontend && npm run lint
 ```
 frontend/src/
 ├── app/
-│   ├── page.tsx          # Dashboard page (thin orchestration layer, ~140 lines)
+│   ├── page.tsx          # Dashboard page (thin orchestration layer, ~260 lines)
 │   ├── layout.tsx        # Root layout + metadata
 │   └── globals.css       # Base styles (dark background, scrollbar, animations)
 ├── components/
 │   ├── StatCard.tsx      # Metric card with icon + accent
-│   ├── BarChart.tsx      # Daily cost bar chart with Y-axis
+│   ├── BarChart.tsx      # Daily cost bar chart with Y-axis + CSV export
 │   ├── ProviderPie.tsx   # SVG donut chart for provider breakdown
 │   ├── ActivityHeatmap.tsx  # GitHub-style token heatmap
-│   ├── KeysTable.tsx     # API keys table with rotate/revoke/test-webhook
+│   ├── KeysTable.tsx     # API keys table with BudgetBar (shows $spent/$budget)
+│   ├── BudgetBar         # Named component: progress bar with % spent (nested in KeysTable)
 │   ├── NewKeyModal.tsx   # Create key modal with form validation
 │   ├── ConfirmDialog.tsx # Reusable destructive-action dialog
+│   ├── KeyDrillDown.tsx  # Key detail panel showing drill-down stats
+│   ├── LogsTable.tsx     # Paginated request log
 │   └── Toast.tsx         # Slide-in toast notifications + useToast hook
 ├── hooks/
-│   └── useDashboard.ts   # Data fetching, error state, optimistic revoke
+│   ├── useDashboard.ts   # Data fetching (keys, stats, heatmap, keyStats), error state
+│   └── useRequestLogs.ts # Request log pagination
 └── lib/
-    ├── api.ts            # API client + TypeScript types
+    ├── api.ts            # API client + TypeScript types (includes KeyStat)
     └── format.ts         # Shared fmt$() / fmtK() formatters
 ```
+
+### New Features (Recent Updates)
+
+1. **Budget Bars** — `KeysTable` displays budget utilization (green → amber → red at 70%/90%)
+2. **Monthly Forecast** — StatCard projects end-of-month cost from daily average
+3. **CSV Export** — Download daily cost data from the BarChart header
+4. **keyStats Hook Return** — `useDashboard()` now returns `keyStats: KeyStat[]` for per-key breakdown
 
 ## Adding a New AI Provider
 
