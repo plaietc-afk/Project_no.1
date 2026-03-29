@@ -89,6 +89,30 @@ export interface HeatmapData {
   max_tokens: number;
 }
 
+export interface RequestLog {
+  id: number;
+  key_name: string;
+  provider: string;
+  model: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  latency_ms: number;
+  timestamp: string;
+  status_code: number;
+  cached: boolean;
+}
+
+export interface KeyStat {
+  key_id: number;
+  key_name: string;
+  provider: string;
+  total_tokens: number;
+  total_cost_usd: number;
+  total_requests: number;
+}
+
 // ---- API functions ----
 
 export const keysApi = {
@@ -131,5 +155,14 @@ export const statsApi = {
     apiFetch<{ success: boolean; data: DailyStat[] }>(`/api/stats/daily?days=${days}`),
 
   heatmap: (year?: number) =>
-    apiFetch<{ success: boolean; data: HeatmapData }>(`/api/stats/heatmap${year ? `?year=${year}` : ''}`)
+    apiFetch<{ success: boolean; data: HeatmapData }>(`/api/stats/heatmap${year ? `?year=${year}` : ''}`),
+
+  logs: (page = 1, limit = 50, key_id?: number) => {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (key_id !== undefined) params.set("key_id", String(key_id));
+    return apiFetch<{ success: boolean; data: RequestLog[]; meta: PageMeta }>(`/api/stats/logs?${params}`);
+  },
+
+  byKey: (days = 30) =>
+    apiFetch<{ success: boolean; data: KeyStat[] }>(`/api/stats/by-key?days=${days}`)
 };

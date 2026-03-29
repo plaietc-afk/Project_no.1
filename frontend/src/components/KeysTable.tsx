@@ -15,6 +15,7 @@ interface KeysTableProps {
   onRevoke: (id: number) => Promise<void>;
   onToast: (msg: string, type?: ToastType) => void;
   onRotated: () => void;
+  onKeySelect?: (key: ApiKey) => void;
 }
 
 function statusLabel(k: ApiKey) {
@@ -62,7 +63,7 @@ function RotatedKeyBanner({ keyValue, onDismiss }: RotatedKeyBannerProps) {
   );
 }
 
-export function KeysTable({ keys, loading, onRevoke, onToast, onRotated }: KeysTableProps) {
+export function KeysTable({ keys, loading, onRevoke, onToast, onRotated, onKeySelect }: KeysTableProps) {
   const [filterProvider, setFilterProvider] = useState("All");
   const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null);
   const [rotatedKeys, setRotatedKeys] = useState<Record<number, string>>({});
@@ -211,7 +212,12 @@ export function KeysTable({ keys, loading, onRevoke, onToast, onRotated }: KeysT
                     )}
                     <tr className="hover:bg-zinc-800/20 transition-colors">
                       <td className="px-6 py-4">
-                        <div className="font-medium text-white">{k.key_name}</div>
+                        <div
+                          className={`font-medium text-white ${onKeySelect ? "cursor-pointer hover:text-indigo-400 transition-colors" : ""}`}
+                          onClick={onKeySelect ? () => onKeySelect(k) : undefined}
+                        >
+                          {k.key_name}
+                        </div>
                         {k.project_id && <div className="text-xs text-zinc-500 mt-0.5">{k.project_id}</div>}
                       </td>
                       <td className="px-6 py-4 font-mono text-zinc-400 text-xs">{k.key_prefix}…</td>

@@ -1,16 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Image from "next/image";
 import { useDashboard } from "../hooks/useDashboard";
+import { useRequestLogs } from "../hooks/useRequestLogs";
 import { StatCard } from "../components/StatCard";
 import { BarChart } from "../components/BarChart";
 import { ProviderPie } from "../components/ProviderPie";
 import { ActivityHeatmap } from "../components/ActivityHeatmap";
 import { NewKeyModal } from "../components/NewKeyModal";
 import { KeysTable } from "../components/KeysTable";
+import { LogsTable } from "../components/LogsTable";
+import { KeyDrillDown } from "../components/KeyDrillDown";
 import { useToast, ToastContainer } from "../components/Toast";
 import { fmt$, fmtK } from "../lib/format";
+import type { ApiKey } from "../lib/api";
 
 // ---- Icons ----
 const IconCost = () => (
@@ -44,8 +48,14 @@ const IconRefresh = () => (
 export default function Dashboard() {
   const [days, setDays] = useState(30);
   const [showNewKey, setShowNewKey] = useState(false);
+  const [drillDownKey, setDrillDownKey] = useState<ApiKey | null>(null);
   const { keys, overview, providerStats, dailyStats, heatmap, loading, error, refresh, revokeKey, addKey } = useDashboard(days);
+  const { logs, meta: logsMeta, loading: logsLoading, setPage: setLogsPage } = useRequestLogs();
   const { toasts, push: pushToast, dismiss: dismissToast } = useToast();
+
+  const handleKeySelect = useCallback((key: ApiKey) => {
+    setDrillDownKey(key);
+  }, []);
 
   const activeKeys = keys.filter(k => k.is_active).length;
 
@@ -174,7 +184,22 @@ export default function Dashboard() {
           onRevoke={revokeKey}
           onToast={pushToast}
           onRotated={() => refresh()}
+          onKeySelect={handleKeySelect}
         />
+
+        {/* Request Log Table */}
+        <div className="bg-zinc-900 border border-zinc-800/50 rounded-2xl overflow-hidden">
+          <div className="p-6 border-b border-zinc-800/50">
+            <h2 className="text-xl font-semibold text-white">Request Log</h2>
+            <p className="text-sm text-zinc-400 mt-1">Recent requests proxied through TokenGuard.</p>
+          </div>
+          <LogsTable
+            logs={logs}
+            meta={logsMeta}
+            loading={logsLoading}
+            onPageChange={setLogsPage}
+          />
+        </div>
       </div>
 
       {showNewKey && (
@@ -185,6 +210,8 @@ export default function Dashboard() {
       )}
 
       <ToastContainer toasts={toasts} dismiss={dismissToast} />
+
+      <KeyDrillDown apiKey={drillDownKey} onClose={() => setDrillDownKey(null)} />
     </div>
   );
 }
