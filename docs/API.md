@@ -1,6 +1,7 @@
 # API Reference
 
-All management endpoints require a valid session cookie (`access_token`) obtained via `/auth/login`.
+TokenGuard is an open-access self-hosted tool. Management endpoints (`/api/keys`, `/api/stats`) require **no authentication** — anyone who can reach the server can use them. The admin section (`/api/admin`) still requires an admin session cookie.
+
 The AI proxy endpoint uses a personal API key (`Authorization: Bearer tg-...`).
 
 Base URL: `http://localhost:4000`
@@ -47,7 +48,7 @@ Rate limited: 10 requests / 15 minutes per IP.
 
 ## API Keys (`/api/keys`)
 
-Requires session. Users see only their own keys; admins see all.
+No authentication required. All keys are visible to anyone who can reach the server.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -63,7 +64,7 @@ Requires session. Users see only their own keys; admins see all.
 
 ## Analytics (`/api/stats`)
 
-Requires session. Data is scoped to the current user; admins see all users.
+No authentication required.
 
 | Method | Path | Query params | Description |
 |--------|------|-------------|-------------|
@@ -79,7 +80,7 @@ Requires session. Data is scoped to the current user; admins see all users.
 
 ## Admin (`/api/admin`)
 
-Requires session with `role = admin`.
+Requires a session cookie (`access_token`) with `role = admin`. Obtain one via `POST /auth/login`.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -110,10 +111,9 @@ Common error codes:
 
 | Code | Status | Meaning |
 |------|--------|---------|
-| `UNAUTHENTICATED` | 401 | Missing or invalid token |
+| `UNAUTHENTICATED` | 401 | Missing or invalid token (admin endpoints only) |
 | `TOKEN_INVALID` | 401 | Expired or malformed JWT |
-| `MODEL_NOT_ALLOWED` | 403 | Model not permitted on current package |
-| `QUOTA_EXCEEDED` | 429 | Monthly token quota exhausted |
-| `BUDGET_EXCEEDED` | 429 | Monthly USD budget exhausted |
-| `RATE_LIMIT_RPM` | 429 | Requests-per-minute limit hit |
-| `RATE_LIMIT` | 429 | Auth endpoint rate limit hit |
+| `KEY_INVALID` | 401 | API key missing, revoked, or not found |
+| `BUDGET_EXCEEDED` | 429 | Key USD budget exhausted |
+| `RATE_LIMIT_RPM` | 429 | Requests-per-minute limit hit on key |
+| `RATE_LIMIT` | 429 | Auth endpoint rate limit hit (10 req/15 min) |

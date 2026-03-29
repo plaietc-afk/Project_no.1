@@ -33,7 +33,7 @@ cd frontend && npm run build && npm run start
 
 On first start the backend will:
 1. Create `backend/data.db` with all tables
-2. Seed 3 default packages (Free / Pro / Enterprise)
+2. Seed default packages (all users default to Enterprise — unlimited usage, no quotas enforced)
 3. Create the admin user from `ADMIN_EMAIL` / `ADMIN_PASSWORD`
 
 > If `ADMIN_EMAIL` or `ADMIN_PASSWORD` are missing, the server throws and exits.
@@ -49,15 +49,13 @@ curl http://localhost:4000/health
 
 ---
 
-## Default Package Tiers
+## Access Model
 
-| Tier | Token quota | USD budget | RPM | Models |
-|------|------------|------------|-----|--------|
-| Free | 100,000 / mo | $2.00 / mo | 10 | gpt-3.5-turbo, gemini-1.5-flash-latest, llama3-8b-8192 |
-| Pro | 5,000,000 / mo | $50.00 / mo | 100 | All models |
-| Enterprise | Unlimited | Unlimited | 1,000 | All models |
+TokenGuard is an open-access self-hosted tool — there are no usage tiers or quotas enforced.
+All users default to the Enterprise package (unlimited tokens, unlimited spend, all models).
 
-Manage tiers via `PUT /api/admin/packages/:id` or directly in the admin panel.
+Per-key limits (RPM, TPM, USD budget) can still be configured on individual API keys for governance.
+Manage users via the admin API (`/api/admin`).
 
 ---
 
@@ -92,13 +90,6 @@ kill -9 <pid>
 
 **Cause:** Key was rotated or revoked, or is being sent as plaintext after a rotation.
 **Fix:** Rotate the key via `POST /api/keys/:id/rotate` and update the client with the new `tg-...` value.
-
----
-
-### User quota exceeded but usage looks low
-
-**Cause:** `usage_reset_at` may be stale if the server was down during the reset window.
-**Fix (admin):** Reset via `PUT /api/admin/users/:id/package` (re-assign same package) or update `tokens_used = 0, usd_spent = 0` directly in the DB.
 
 ---
 

@@ -71,6 +71,30 @@ cd frontend && npx tsc --noEmit
 cd frontend && npm run lint
 ```
 
+## Frontend Architecture
+
+```
+frontend/src/
+├── app/
+│   ├── page.tsx          # Dashboard page (thin orchestration layer, ~140 lines)
+│   ├── layout.tsx        # Root layout + metadata
+│   └── globals.css       # Base styles (dark background, scrollbar, animations)
+├── components/
+│   ├── StatCard.tsx      # Metric card with icon + accent
+│   ├── BarChart.tsx      # Daily cost bar chart with Y-axis
+│   ├── ProviderPie.tsx   # SVG donut chart for provider breakdown
+│   ├── ActivityHeatmap.tsx  # GitHub-style token heatmap
+│   ├── KeysTable.tsx     # API keys table with rotate/revoke/test-webhook
+│   ├── NewKeyModal.tsx   # Create key modal with form validation
+│   ├── ConfirmDialog.tsx # Reusable destructive-action dialog
+│   └── Toast.tsx         # Slide-in toast notifications + useToast hook
+├── hooks/
+│   └── useDashboard.ts   # Data fetching, error state, optimistic revoke
+└── lib/
+    ├── api.ts            # API client + TypeScript types
+    └── format.ts         # Shared fmt$() / fmtK() formatters
+```
+
 ## Adding a New AI Provider
 
 1. Create `backend/src/providers/<name>.ts` implementing the `ProviderAdapter` interface
