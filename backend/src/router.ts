@@ -75,13 +75,17 @@ export class SmartRouter {
       try {
         const result = await adapter.chatCompletion(routedReq, providerApiKey);
         const latencyMs = Date.now() - startMs;
-        console.log(`[Router] ${providerKey}/${modelToUse} succeeded in ${latencyMs}ms`);
+        if (process.env.NODE_ENV !== 'production') {
+          process.stderr.write(`[Router] ${providerKey}/${modelToUse} succeeded in ${latencyMs}ms\n`);
+        }
         return { ...result, _provider: providerKey, _latencyMs: latencyMs };
       } catch (err: unknown) {
         const latencyMs = Date.now() - startMs;
         const errMsg = err instanceof Error ? err.message : String(err);
         attempts.push({ provider: providerKey, error: errMsg });
-        console.warn(`[Router] ${providerKey}/${modelToUse} failed in ${latencyMs}ms: ${errMsg}`);
+        if (process.env.NODE_ENV !== 'production') {
+          process.stderr.write(`[Router] ${providerKey}/${modelToUse} failed in ${latencyMs}ms: ${errMsg}\n`);
+        }
 
         if (!isRetryableError(err)) {
           // Non-retryable error (e.g. bad request, auth failure) — stop immediately

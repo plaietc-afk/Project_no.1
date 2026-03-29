@@ -249,14 +249,15 @@ async function handleStreamRequest(
 
     const decoder = new TextDecoder();
     const collectedLines: string[] = [];
-    let resolved = false;
+    let clientDisconnected = false;
+    let readerReleased = false;
 
     const reader = stream.getReader();
 
     const cleanup = () => {
-      if (!resolved) { resolved = true; reader.cancel().catch(() => { /* ignore */ }); }
+      if (!readerReleased) { readerReleased = true; reader.cancel().catch(() => { /* ignore */ }); }
     };
-    req.on('close', cleanup);
+    req.on('close', () => { clientDisconnected = true; cleanup(); });
 
     try {
       while (true) {
@@ -264,34 +265,35 @@ async function handleStreamRequest(
         if (done) break;
         const text = decoder.decode(value, { stream: true });
         collectedLines.push(...text.split('\n'));
-        res.write(text);
+        if (!clientDisconnected) res.write(text);
       }
     } finally {
       cleanup();
     }
 
-    res.end();
+    if (!clientDisconnected) res.end();
 
-    // Log usage after stream completes
+    // Always log to token_logs — use zero usage as fallback so the request is always recorded
     const usage = parseUsageFromSSE(collectedLines);
-    if (usage) {
-      const { prompt_tokens, completion_tokens, total_tokens } = usage;
-      const model = (req.body as { model?: string }).model || 'unknown';
-      const costUsd = calculateCost(model, prompt_tokens, completion_tokens);
-      db.prepare(
-        'INSERT INTO token_logs (api_key_id, user_id, model, provider, prompt_tokens, completion_tokens, total_tokens, cost_usd, latency_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(apiKeyId, proxyUserId, model, _provider, prompt_tokens, completion_tokens, total_tokens, costUsd, _latencyMs);
-      if (proxyUserId) {
-        db.prepare('UPDATE users SET tokens_used = tokens_used + ?, usd_spent = usd_spent + ? WHERE id = ?')
-          .run(total_tokens, costUsd, proxyUserId);
-      }
+    const model = (req.body as { model?: string }).model || 'unknown';
+    const prompt_tokens = usage?.prompt_tokens ?? 0;
+    const completion_tokens = usage?.completion_tokens ?? 0;
+    const total_tokens = usage?.total_tokens ?? 0;
+    const costUsd = calculateCost(model, prompt_tokens, completion_tokens);
+    db.prepare(
+      'INSERT INTO token_logs (api_key_id, user_id, model, provider, prompt_tokens, completion_tokens, total_tokens, cost_usd, latency_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(apiKeyId, proxyUserId, model, _provider, prompt_tokens, completion_tokens, total_tokens, costUsd, _latencyMs);
+    if (proxyUserId && total_tokens > 0) {
+      db.prepare('UPDATE users SET tokens_used = tokens_used + ?, usd_spent = usd_spent + ? WHERE id = ?')
+        .run(total_tokens, costUsd, proxyUserId);
     }
   } catch (err: unknown) {
     if (!res.headersSent) {
       if (err instanceof RouterExhaustedError) {
         res.status(503).json({ success: false, error: 'All providers failed or do not support streaming', attempts: err.attempts });
       } else {
-        process.stderr.write(`[stream error] ${err instanceof Error ? err.message : String(err)}\n`);
+        // Log error type only — do not write upstream body to stderr (may contain provider account metadata)
+        process.stderr.write(`[stream error] ${err instanceof Error ? err.constructor.name : 'UnknownError'}\n`);
         res.status(500).json({ success: false, error: 'Internal proxy error during streaming.' });
       }
     }

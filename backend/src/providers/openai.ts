@@ -17,8 +17,7 @@ export class OpenAIAdapter implements ProviderAdapter {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`${this.providerName} API Error: ${response.status} - ${JSON.stringify(errorData)}`);
+      throw new Error(`${this.providerName} API Error: ${response.status}`);
     }
 
     return await response.json() as ChatCompletionResponse;
@@ -36,8 +35,7 @@ export class OpenAIAdapter implements ProviderAdapter {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`${this.providerName} API Error: ${response.status} - ${JSON.stringify(errorData)}`);
+      throw new Error(`${this.providerName} API Error: ${response.status}`);
     }
 
     if (!response.body) throw new Error(`${this.providerName} returned empty stream`);

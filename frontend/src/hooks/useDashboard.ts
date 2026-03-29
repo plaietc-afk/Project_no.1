@@ -25,18 +25,14 @@ export function useDashboard(days: number, selectedUserId?: number | null) {
     setLoading(true);
     setError(null);
     try {
-      const userParam = selectedUserId ?? undefined;
-      const overviewUrl = userParam ? `days=${days}&user_id=${userParam}` : `days=${days}`;
-      void overviewUrl; // used indirectly via fetch calls below
-
       const [keysRes, overviewRes, provRes, dailyRes, heatRes, keyStatsRes, latencyRes, userStatsRes] = await Promise.allSettled([
         keysApi.list(1, KEYS_PAGE_SIZE),
-        statsApi.overview(days),
-        statsApi.byProvider(days),
-        statsApi.daily(days),
+        statsApi.overview(days, selectedUserId),
+        statsApi.byProvider(days, selectedUserId),
+        statsApi.daily(days, selectedUserId),
         statsApi.heatmap(),
-        statsApi.byKey(days),
-        statsApi.latency(days),
+        statsApi.byKey(days, selectedUserId),
+        statsApi.latency(days, selectedUserId),
         statsApi.byUser(days),
       ]);
 
@@ -45,8 +41,7 @@ export function useDashboard(days: number, selectedUserId?: number | null) {
       if (keysRes.status === "fulfilled") {
         setKeys(keysRes.value.data);
         if (keysRes.value.meta.total > KEYS_PAGE_SIZE) {
-          // Warn in dev — pagination support is a future improvement
-          console.warn(`TokenGuard: ${keysRes.value.meta.total} keys exist but only ${KEYS_PAGE_SIZE} are shown. Pagination not yet implemented.`);
+          // Pagination not yet implemented — silently truncates at KEYS_PAGE_SIZE
         }
       } else { anyFailed = true; }
 

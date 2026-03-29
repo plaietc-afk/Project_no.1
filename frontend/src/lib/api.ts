@@ -182,33 +182,40 @@ export const keysApi = {
     })
 };
 
+function scopedParams(days: number, userId?: number | null): string {
+  const p = new URLSearchParams({ days: String(days) });
+  if (userId != null) p.set("user_id", String(userId));
+  return p.toString();
+}
+
 export const statsApi = {
-  overview: (days = 30) =>
-    apiFetch<{ success: boolean; data: OverviewStats }>(`/api/stats/overview?days=${days}`),
+  overview: (days = 30, userId?: number | null) =>
+    apiFetch<{ success: boolean; data: OverviewStats }>(`/api/stats/overview?${scopedParams(days, userId)}`),
 
-  byProvider: (days = 30) =>
-    apiFetch<{ success: boolean; data: ProviderStat[] }>(`/api/stats/by-provider?days=${days}`),
+  byProvider: (days = 30, userId?: number | null) =>
+    apiFetch<{ success: boolean; data: ProviderStat[] }>(`/api/stats/by-provider?${scopedParams(days, userId)}`),
 
-  daily: (days = 30) =>
-    apiFetch<{ success: boolean; data: DailyStat[] }>(`/api/stats/daily?days=${days}`),
+  daily: (days = 30, userId?: number | null) =>
+    apiFetch<{ success: boolean; data: DailyStat[] }>(`/api/stats/daily?${scopedParams(days, userId)}`),
 
   heatmap: (year?: number) =>
     apiFetch<{ success: boolean; data: HeatmapData }>(`/api/stats/heatmap${year ? `?year=${year}` : ''}`),
 
-  logs: (page = 1, limit = 50, key_id?: number) => {
+  logs: (page = 1, limit = 50, key_id?: number, userId?: number | null) => {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (key_id !== undefined) params.set("key_id", String(key_id));
+    if (userId != null) params.set("user_id", String(userId));
     return apiFetch<{ success: boolean; data: RequestLog[]; meta: PageMeta }>(`/api/stats/logs?${params}`);
   },
 
-  byKey: (days = 30) =>
-    apiFetch<{ success: boolean; data: KeyStat[] }>(`/api/stats/by-key?days=${days}`),
+  byKey: (days = 30, userId?: number | null) =>
+    apiFetch<{ success: boolean; data: KeyStat[] }>(`/api/stats/by-key?${scopedParams(days, userId)}`),
 
   byUser: (days = 30) =>
     apiFetch<{ success: boolean; data: UserStat[] }>(`/api/stats/by-user?days=${days}`),
 
-  latency: (days = 30) =>
-    apiFetch<{ success: boolean; data: LatencyStat[] }>(`/api/stats/latency?days=${days}`),
+  latency: (days = 30, userId?: number | null) =>
+    apiFetch<{ success: boolean; data: LatencyStat[] }>(`/api/stats/latency?${scopedParams(days, userId)}`),
 
   costComparisonClasses: () =>
     apiFetch<{ success: boolean; data: ModelClass[] }>('/api/stats/cost-comparison/classes'),

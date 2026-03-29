@@ -85,8 +85,7 @@ export class AnthropicAdapter implements ProviderAdapter {
     });
 
     if (!upstream.ok) {
-      const errorData = await upstream.json().catch(() => ({}));
-      throw new Error(`Anthropic API Error: ${upstream.status} - ${JSON.stringify(errorData)}`);
+      throw new Error(`Anthropic API Error: ${upstream.status}`);
     }
 
     if (!upstream.body) throw new Error('Anthropic returned empty stream');

@@ -18,9 +18,16 @@ interface PricingConfig {
   model_classes: ModelClass[];
 }
 
+let _pricingCache: PricingConfig | null = null;
 function loadPricingConfig(): PricingConfig {
+  if (_pricingCache) return _pricingCache;
   const filePath = path.resolve(__dirname, '../data/model-pricing.json');
-  return JSON.parse(fs.readFileSync(filePath, 'utf8')) as PricingConfig;
+  try {
+    _pricingCache = JSON.parse(fs.readFileSync(filePath, 'utf8')) as PricingConfig;
+    return _pricingCache;
+  } catch {
+    throw new Error('Pricing configuration unavailable');
+  }
 }
 
 const router = Router();
@@ -36,9 +43,12 @@ function dateRange(req: Request): { from: string; to: string } {
   return { from, to };
 }
 
-// Returns optional user_id filter clause — accepts ?user_id= query param for per-user filtering
+// Returns optional user_id filter clause — accepts ?user_id= query param for per-user filtering.
+// NOTE: This is an open-access self-hosted tool; any caller can filter by any user_id.
+// Network-level protection is assumed. Validate the value is a safe positive integer.
 function userScope(req: Request): { clause: string; params: unknown[] } {
-  const userId = req.query.user_id ? parseInt(req.query.user_id as string) : null;
+  const raw = parseInt(req.query.user_id as string, 10);
+  const userId = Number.isInteger(raw) && raw > 0 ? raw : null;
   if (userId) return { clause: 'AND user_id = ?', params: [userId] };
   return { clause: '', params: [] };
 }
