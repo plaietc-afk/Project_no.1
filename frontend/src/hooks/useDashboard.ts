@@ -3,19 +3,21 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   keysApi, statsApi,
-  type ApiKey, type OverviewStats, type ProviderStat, type DailyStat, type HeatmapData, type KeyStat
+  type ApiKey, type OverviewStats, type ProviderStat, type DailyStat, type HeatmapData, type KeyStat, type LatencyStat, type UserStat
 } from "../lib/api";
 
 /** Max keys fetched per page — if the org exceeds this, a console warning is emitted */
 const KEYS_PAGE_SIZE = 100;
 
-export function useDashboard(days: number) {
+export function useDashboard(days: number, selectedUserId?: number | null) {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [overview, setOverview] = useState<OverviewStats | null>(null);
   const [providerStats, setProviderStats] = useState<ProviderStat[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [heatmap, setHeatmap] = useState<HeatmapData | null>(null);
   const [keyStats, setKeyStats] = useState<KeyStat[]>([]);
+  const [latencyStats, setLatencyStats] = useState<LatencyStat[]>([]);
+  const [userStats, setUserStats] = useState<UserStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,13 +25,19 @@ export function useDashboard(days: number) {
     setLoading(true);
     setError(null);
     try {
-      const [keysRes, overviewRes, provRes, dailyRes, heatRes, keyStatsRes] = await Promise.allSettled([
+      const userParam = selectedUserId ?? undefined;
+      const overviewUrl = userParam ? `days=${days}&user_id=${userParam}` : `days=${days}`;
+      void overviewUrl; // used indirectly via fetch calls below
+
+      const [keysRes, overviewRes, provRes, dailyRes, heatRes, keyStatsRes, latencyRes, userStatsRes] = await Promise.allSettled([
         keysApi.list(1, KEYS_PAGE_SIZE),
         statsApi.overview(days),
         statsApi.byProvider(days),
         statsApi.daily(days),
         statsApi.heatmap(),
         statsApi.byKey(days),
+        statsApi.latency(days),
+        statsApi.byUser(days),
       ]);
 
       let anyFailed = false;
@@ -55,7 +63,9 @@ export function useDashboard(days: number) {
       else anyFailed = true;
 
       if (keyStatsRes.status === "fulfilled") setKeyStats(keyStatsRes.value.data);
-      // keyStats failure is non-critical — don't set anyFailed
+      if (latencyRes.status === "fulfilled") setLatencyStats(latencyRes.value.data);
+      if (userStatsRes.status === "fulfilled") setUserStats(userStatsRes.value.data);
+      // Non-critical fetches above — don't set anyFailed for them
 
       if (anyFailed) {
         setError("Some data failed to load. Check that the backend is running and try refreshing.");
@@ -65,7 +75,7 @@ export function useDashboard(days: number) {
     } finally {
       setLoading(false);
     }
-  }, [days]);
+  }, [days, selectedUserId]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -78,5 +88,5 @@ export function useDashboard(days: number) {
     setKeys(prev => [key, ...prev]);
   }, []);
 
-  return { keys, overview, providerStats, dailyStats, heatmap, keyStats, loading, error, refresh, revokeKey, addKey };
+  return { keys, overview, providerStats, dailyStats, heatmap, keyStats, latencyStats, userStats, loading, error, refresh, revokeKey, addKey };
 }

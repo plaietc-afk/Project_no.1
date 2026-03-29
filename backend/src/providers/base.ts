@@ -15,7 +15,13 @@ export interface ChatCompletionResponse {
   usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
 }
 
+export interface StreamResult {
+  stream: ReadableStream<Uint8Array>;
+  headers: Record<string, string>;
+}
+
 export interface ProviderAdapter {
   name: string;
   chatCompletion(req: ChatCompletionRequest, apiKey: string): Promise<ChatCompletionResponse>;
+  chatCompletionStream?(req: ChatCompletionRequest, apiKey: string): Promise<StreamResult>;
 }

@@ -1,6 +1,5 @@
 import Database from 'better-sqlite3';
 import path from 'path';
-import bcrypt from 'bcrypt';
 
 const dbPath = path.resolve(__dirname, '../data.db');
 const db = new Database(dbPath);
@@ -101,7 +100,9 @@ const migrations: string[] = [
   "ALTER TABLE token_logs ADD COLUMN is_cached INTEGER DEFAULT 0;",
   "ALTER TABLE token_logs ADD COLUMN cost_usd_saved REAL DEFAULT 0;",
   "ALTER TABLE token_logs ADD COLUMN provider TEXT;",
-  "ALTER TABLE token_logs ADD COLUMN user_id INTEGER;"
+  "ALTER TABLE token_logs ADD COLUMN user_id INTEGER;",
+  "ALTER TABLE token_logs ADD COLUMN latency_ms INTEGER DEFAULT 0;",
+  "ALTER TABLE users ADD COLUMN display_name TEXT;"
 ];
 for (const m of migrations) { try { db.exec(m); } catch (_) { /* already applied */ } }
 
@@ -117,17 +118,11 @@ if (packageCount === 0) {
     VALUES (?, ?, ?, ?, ?, ?, ?)`).run('enterprise', 'Enterprise', 0, 0, 1000, '[]', 'monthly');
 }
 
-// ---- Seed admin user ----
+// ---- Seed default user (display name only — no auth) ----
 const userCount = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c;
 if (userCount === 0) {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  const adminPassword = process.env.ADMIN_PASSWORD;
-  if (!adminEmail || !adminPassword) {
-    throw new Error('[FATAL] ADMIN_EMAIL and ADMIN_PASSWORD must be set in environment before first run.');
-  }
-  const hash = bcrypt.hashSync(adminPassword, 12);
-  db.prepare(`INSERT INTO users (email, password_hash, full_name, role, package_id) VALUES (?, ?, ?, 'admin', 3)`)
-    .run(adminEmail, hash, 'Admin');
+  db.prepare(`INSERT INTO users (email, password_hash, display_name, full_name, role, package_id) VALUES (?, '', 'Admin', 'Admin', 'admin', 3)`)
+    .run('admin@localhost');
 }
 
 export default db;

@@ -10,15 +10,10 @@ import keysRouter from './routes/keys';
 import analyticsRouter from './routes/analytics';
 import authRouter from './routes/auth';
 import adminRouter from './routes/admin';
+import usersRouter from './routes/users';
 import { requireAuth } from './middleware/requireAuth';
 
 dotenv.config();
-
-// Fail fast if required secrets are missing
-if (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET) {
-  process.stderr.write('[FATAL] JWT_SECRET and JWT_REFRESH_SECRET must be set. Generate with: openssl rand -hex 64\n');
-  process.exit(1);
-}
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -214,6 +209,95 @@ async function checkBudgetAndAlert(apiKeyId: number, currentSpend: number, keyRe
   }
 }
 
+// ---- Streaming Proxy Handler ----
+// Parses OpenAI-compatible SSE chunks and extracts usage from the final data chunk.
+function parseUsageFromSSE(lines: string[]): { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (!line.startsWith('data:')) continue;
+    const data = line.slice(5).trim();
+    if (data === '[DONE]') continue;
+    try {
+      const chunk = JSON.parse(data) as { usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } };
+      if (chunk.usage?.total_tokens) {
+        return {
+          prompt_tokens: chunk.usage.prompt_tokens ?? 0,
+          completion_tokens: chunk.usage.completion_tokens ?? 0,
+          total_tokens: chunk.usage.total_tokens
+        };
+      }
+    } catch { /* skip */ }
+  }
+  return null;
+}
+
+async function handleStreamRequest(
+  req: express.Request,
+  res: express.Response,
+  apiKeyId: number,
+  providerStr: string,
+  proxyUserId: number | null,
+  routerConfig: RouterEntry[] | null
+): Promise<void> {
+  try {
+    const { stream, _provider, _latencyMs } = await SmartRouter.routeStream(req.body, providerStr, routerConfig);
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    const decoder = new TextDecoder();
+    const collectedLines: string[] = [];
+    let resolved = false;
+
+    const reader = stream.getReader();
+
+    const cleanup = () => {
+      if (!resolved) { resolved = true; reader.cancel().catch(() => { /* ignore */ }); }
+    };
+    req.on('close', cleanup);
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const text = decoder.decode(value, { stream: true });
+        collectedLines.push(...text.split('\n'));
+        res.write(text);
+      }
+    } finally {
+      cleanup();
+    }
+
+    res.end();
+
+    // Log usage after stream completes
+    const usage = parseUsageFromSSE(collectedLines);
+    if (usage) {
+      const { prompt_tokens, completion_tokens, total_tokens } = usage;
+      const model = (req.body as { model?: string }).model || 'unknown';
+      const costUsd = calculateCost(model, prompt_tokens, completion_tokens);
+      db.prepare(
+        'INSERT INTO token_logs (api_key_id, user_id, model, provider, prompt_tokens, completion_tokens, total_tokens, cost_usd, latency_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(apiKeyId, proxyUserId, model, _provider, prompt_tokens, completion_tokens, total_tokens, costUsd, _latencyMs);
+      if (proxyUserId) {
+        db.prepare('UPDATE users SET tokens_used = tokens_used + ?, usd_spent = usd_spent + ? WHERE id = ?')
+          .run(total_tokens, costUsd, proxyUserId);
+      }
+    }
+  } catch (err: unknown) {
+    if (!res.headersSent) {
+      if (err instanceof RouterExhaustedError) {
+        res.status(503).json({ success: false, error: 'All providers failed or do not support streaming', attempts: err.attempts });
+      } else {
+        process.stderr.write(`[stream error] ${err instanceof Error ? err.message : String(err)}\n`);
+        res.status(500).json({ success: false, error: 'Internal proxy error during streaming.' });
+      }
+    }
+  }
+}
+
 // ---- Main Proxy Endpoint ----
 app.post('/v1/chat/completions', authenticateAndLoadKey, enforcePackageLimits, rateLimiter,
   async (req: express.Request, res: express.Response) => {
@@ -247,14 +331,20 @@ app.post('/v1/chat/completions', authenticateAndLoadKey, enforcePackageLimits, r
       const routerConfig: RouterEntry[] | null = keyRecord.router_config
         ? JSON.parse(keyRecord.router_config as string) : null;
 
+      // Branch: streaming request
+      if ((req.body as { stream?: boolean }).stream === true) {
+        return await handleStreamRequest(req, res, apiKeyId, providerStr, r.proxyUser?.id ?? null, routerConfig);
+      }
+
       const response = await SmartRouter.route(req.body, providerStr, routerConfig);
       const { prompt_tokens, completion_tokens, total_tokens } = response.usage;
       const costUsd = calculateCost(response.model, prompt_tokens, completion_tokens);
       const usedProvider = response._provider || providerStr;
+      const latencyMs = response._latencyMs ?? 0;
 
       db.prepare(
-        'INSERT INTO token_logs (api_key_id, user_id, model, provider, prompt_tokens, completion_tokens, total_tokens, cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(apiKeyId, r.proxyUser?.id ?? null, response.model, usedProvider, prompt_tokens, completion_tokens, total_tokens, costUsd);
+        'INSERT INTO token_logs (api_key_id, user_id, model, provider, prompt_tokens, completion_tokens, total_tokens, cost_usd, latency_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(apiKeyId, r.proxyUser?.id ?? null, response.model, usedProvider, prompt_tokens, completion_tokens, total_tokens, costUsd, latencyMs);
 
       // Update user usage counters
       if (r.proxyUser) {
@@ -270,8 +360,8 @@ app.post('/v1/chat/completions', authenticateAndLoadKey, enforcePackageLimits, r
       const totalSpend = (db.prepare('SELECT SUM(cost_usd) as t FROM token_logs WHERE api_key_id = ?').get(apiKeyId) as { t: number | null }).t ?? 0;
       checkBudgetAndAlert(apiKeyId, totalSpend, keyRecord);
 
-      const { _provider, ...cleanResponse } = response;
-      void _provider;
+      const { _provider, _latencyMs, ...cleanResponse } = response;
+      void _provider; void _latencyMs;
       return res.json(cleanResponse);
     } catch (err: unknown) {
       if (err instanceof RouterExhaustedError) {
@@ -288,6 +378,7 @@ app.use('/auth', authRouter);
 // ---- Management routes (open — self-hosted, protect via network/firewall) ----
 app.use('/api/keys', keysRouter);
 app.use('/api/stats', analyticsRouter);
+app.use('/api/users', usersRouter);
 app.use('/api/admin', adminRouter);
 
 // Health check

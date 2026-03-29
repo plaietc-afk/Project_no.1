@@ -113,6 +113,44 @@ export interface KeyStat {
   total_requests: number;
 }
 
+export interface LatencyStat {
+  provider: string;
+  p50_ms: number;
+  p95_ms: number;
+  avg_ms: number;
+  request_count: number;
+}
+
+export interface User {
+  id: number;
+  display_name: string;
+  role: string;
+  created_at: string;
+}
+
+export interface UserStat {
+  user_id: number;
+  display_name: string;
+  total_tokens: number;
+  total_cost_usd: number;
+  total_requests: number;
+}
+
+export interface ModelClass {
+  class: string;
+  display_name: string;
+}
+
+export interface CostComparisonResult {
+  provider: string;
+  model: string;
+  prompt_cost_usd: number;
+  completion_cost_usd: number;
+  total_cost_usd: number;
+  prompt_per_1k: number;
+  completion_per_1k: number;
+}
+
 // ---- API functions ----
 
 export const keysApi = {
@@ -164,5 +202,39 @@ export const statsApi = {
   },
 
   byKey: (days = 30) =>
-    apiFetch<{ success: boolean; data: KeyStat[] }>(`/api/stats/by-key?days=${days}`)
+    apiFetch<{ success: boolean; data: KeyStat[] }>(`/api/stats/by-key?days=${days}`),
+
+  byUser: (days = 30) =>
+    apiFetch<{ success: boolean; data: UserStat[] }>(`/api/stats/by-user?days=${days}`),
+
+  latency: (days = 30) =>
+    apiFetch<{ success: boolean; data: LatencyStat[] }>(`/api/stats/latency?days=${days}`),
+
+  costComparisonClasses: () =>
+    apiFetch<{ success: boolean; data: ModelClass[] }>('/api/stats/cost-comparison/classes'),
+
+  costComparison: (promptTokens: number, completionTokens: number, modelClass: string) => {
+    const params = new URLSearchParams({ prompt_tokens: String(promptTokens), completion_tokens: String(completionTokens), model_class: modelClass });
+    return apiFetch<{ success: boolean; data: CostComparisonResult[]; meta: { prompt_tokens: number; completion_tokens: number; model_class: string } }>(`/api/stats/cost-comparison?${params}`);
+  }
+};
+
+export const usersApi = {
+  list: () =>
+    apiFetch<{ success: boolean; data: User[] }>('/api/users'),
+
+  create: (display_name: string) =>
+    apiFetch<{ success: boolean; data: User }>('/api/users', {
+      method: 'POST',
+      body: JSON.stringify({ display_name })
+    }),
+
+  update: (id: number, display_name: string) =>
+    apiFetch<{ success: boolean; data: User }>(`/api/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ display_name })
+    }),
+
+  remove: (id: number) =>
+    apiFetch<{ success: boolean; message: string }>(`/api/users/${id}`, { method: 'DELETE' })
 };

@@ -1,5 +1,27 @@
 import { Router, Request, Response } from 'express';
+import path from 'path';
+import fs from 'fs';
 import db from '../db';
+
+interface ModelEntry {
+  provider: string;
+  model: string;
+  prompt_per_1k: number;
+  completion_per_1k: number;
+}
+interface ModelClass {
+  class: string;
+  display_name: string;
+  models: ModelEntry[];
+}
+interface PricingConfig {
+  model_classes: ModelClass[];
+}
+
+function loadPricingConfig(): PricingConfig {
+  const filePath = path.resolve(__dirname, '../data/model-pricing.json');
+  return JSON.parse(fs.readFileSync(filePath, 'utf8')) as PricingConfig;
+}
 
 const router = Router();
 
@@ -14,11 +36,11 @@ function dateRange(req: Request): { from: string; to: string } {
   return { from, to };
 }
 
-// Returns user_id filter clause and params for WHERE injection
+// Returns optional user_id filter clause — accepts ?user_id= query param for per-user filtering
 function userScope(req: Request): { clause: string; params: unknown[] } {
-  const isAdmin = req.currentUser?.role === 'admin';
-  if (isAdmin) return { clause: '', params: [] };
-  return { clause: 'AND user_id = ?', params: [req.currentUser?.id ?? -1] };
+  const userId = req.query.user_id ? parseInt(req.query.user_id as string) : null;
+  if (userId) return { clause: 'AND user_id = ?', params: [userId] };
+  return { clause: '', params: [] };
 }
 
 // GET /api/stats/overview
@@ -158,6 +180,55 @@ router.get('/heatmap', (req: Request, res: Response) => {
   return res.json({ success: true, data: { year, days, max_tokens: maxTokens } });
 });
 
+// GET /api/stats/by-user?days=30
+router.get('/by-user', (req: Request, res: Response) => {
+  const { from, to } = dateRange(req);
+
+  const rows = db.prepare(`
+    SELECT u.id AS user_id, COALESCE(u.display_name, u.full_name, u.email) AS display_name,
+      COALESCE(SUM(tl.total_tokens), 0) AS total_tokens,
+      COALESCE(SUM(tl.cost_usd), 0)     AS total_cost_usd,
+      COUNT(tl.id)                        AS total_requests
+    FROM users u
+    LEFT JOIN token_logs tl ON tl.user_id = u.id
+      AND date(tl.created_at) BETWEEN date(?) AND date(?)
+    GROUP BY u.id ORDER BY total_cost_usd DESC
+  `).all(from, to);
+
+  return res.json({ success: true, data: rows });
+});
+
+// GET /api/stats/latency?days=30
+router.get('/latency', (req: Request, res: Response) => {
+  const { from, to } = dateRange(req);
+  const { clause, params } = userScope(req);
+
+  const rows = db.prepare(`
+    SELECT provider, latency_ms
+    FROM token_logs
+    WHERE latency_ms > 0 AND date(created_at) BETWEEN date(?) AND date(?) ${clause}
+    ORDER BY provider, latency_ms
+  `).all(from, to, ...params) as Array<{ provider: string; latency_ms: number }>;
+
+  // Group by provider and compute P50/P95/avg
+  const byProvider = new Map<string, number[]>();
+  for (const row of rows) {
+    const arr = byProvider.get(row.provider) ?? [];
+    arr.push(row.latency_ms);
+    byProvider.set(row.provider, arr);
+  }
+
+  const data = Array.from(byProvider.entries()).map(([provider, values]) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    const p50 = sorted[Math.floor(sorted.length * 0.5)] ?? 0;
+    const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? 0;
+    const avg = Math.round(sorted.reduce((s, v) => s + v, 0) / sorted.length);
+    return { provider, p50_ms: p50, p95_ms: p95, avg_ms: avg, request_count: sorted.length };
+  }).sort((a, b) => a.p50_ms - b.p50_ms);
+
+  return res.json({ success: true, data });
+});
+
 // GET /api/stats/logs
 router.get('/logs', (req: Request, res: Response) => {
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -181,6 +252,42 @@ router.get('/logs', (req: Request, res: Response) => {
   `).all(...params, ...keyParams, limit, offset);
 
   return res.json({ success: true, data: rows, meta: { total, page, limit, pages: Math.ceil(total / limit) } });
+});
+
+// GET /api/stats/cost-comparison/classes
+router.get('/cost-comparison/classes', (_req: Request, res: Response) => {
+  const config = loadPricingConfig();
+  const classes = config.model_classes.map(c => ({ class: c.class, display_name: c.display_name }));
+  return res.json({ success: true, data: classes });
+});
+
+// GET /api/stats/cost-comparison?prompt_tokens=N&completion_tokens=N&model_class=standard
+router.get('/cost-comparison', (req: Request, res: Response) => {
+  const promptTokens = Math.max(0, parseInt(req.query.prompt_tokens as string) || 1_000_000);
+  const completionTokens = Math.max(0, parseInt(req.query.completion_tokens as string) || 300_000);
+  const modelClass = (req.query.model_class as string) || 'standard';
+
+  const config = loadPricingConfig();
+  const cls = config.model_classes.find(c => c.class === modelClass);
+  if (!cls) {
+    return res.status(400).json({ success: false, error: `Unknown model class: ${modelClass}` });
+  }
+
+  const results = cls.models.map(m => {
+    const promptCost = (promptTokens / 1000) * m.prompt_per_1k;
+    const completionCost = (completionTokens / 1000) * m.completion_per_1k;
+    return {
+      provider: m.provider,
+      model: m.model,
+      prompt_cost_usd: promptCost,
+      completion_cost_usd: completionCost,
+      total_cost_usd: promptCost + completionCost,
+      prompt_per_1k: m.prompt_per_1k,
+      completion_per_1k: m.completion_per_1k
+    };
+  }).sort((a, b) => a.total_cost_usd - b.total_cost_usd);
+
+  return res.json({ success: true, data: results, meta: { prompt_tokens: promptTokens, completion_tokens: completionTokens, model_class: modelClass } });
 });
 
 export default router;

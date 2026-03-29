@@ -1,8 +1,11 @@
-import { ProviderAdapter, ChatCompletionRequest, ChatCompletionResponse } from './base';
+import { ProviderAdapter, ChatCompletionRequest, ChatCompletionResponse, StreamResult } from './base';
+import { OpenAIAdapter } from './openai';
 
 // Mistral AI uses an OpenAI-compatible /v1/chat/completions endpoint.
-export class MistralAdapter implements ProviderAdapter {
+export class MistralAdapter extends OpenAIAdapter implements ProviderAdapter {
   name = 'mistral';
+  protected apiBase = 'https://api.mistral.ai/v1';
+  protected providerName = 'Mistral';
 
   async chatCompletion(req: ChatCompletionRequest, apiKey: string): Promise<ChatCompletionResponse> {
     const targetModel = req.model.startsWith('mistral') || req.model.startsWith('open-') || req.model.startsWith('codestral')
@@ -29,5 +32,12 @@ export class MistralAdapter implements ProviderAdapter {
     }
 
     return await response.json() as ChatCompletionResponse;
+  }
+
+  async chatCompletionStream(req: ChatCompletionRequest, apiKey: string): Promise<StreamResult> {
+    const targetModel = req.model.startsWith('mistral') || req.model.startsWith('open-') || req.model.startsWith('codestral')
+      ? req.model
+      : 'mistral-small-latest';
+    return super.chatCompletionStream({ ...req, model: targetModel }, apiKey);
   }
 }

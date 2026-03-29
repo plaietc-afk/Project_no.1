@@ -12,6 +12,10 @@ import { NewKeyModal } from "../components/NewKeyModal";
 import { KeysTable } from "../components/KeysTable";
 import { LogsTable } from "../components/LogsTable";
 import { KeyDrillDown } from "../components/KeyDrillDown";
+import { LatencyTable } from "../components/LatencyTable";
+import { CostComparisonPanel } from "../components/CostComparisonPanel";
+import { UserSelector } from "../components/UserSelector";
+import { UserCostBreakdown } from "../components/UserCostBreakdown";
 import { useToast, ToastContainer } from "../components/Toast";
 import { fmt$, fmtK } from "../lib/format";
 import type { ApiKey } from "../lib/api";
@@ -54,7 +58,8 @@ export default function Dashboard() {
   const [days, setDays] = useState(30);
   const [showNewKey, setShowNewKey] = useState(false);
   const [drillDownKey, setDrillDownKey] = useState<ApiKey | null>(null);
-  const { keys, overview, providerStats, dailyStats, heatmap, keyStats, loading, error, refresh, revokeKey, addKey } = useDashboard(days);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const { keys, overview, providerStats, dailyStats, heatmap, keyStats, latencyStats, userStats, loading, error, refresh, revokeKey, addKey } = useDashboard(days, selectedUserId);
   const { logs, meta: logsMeta, loading: logsLoading, setPage: setLogsPage } = useRequestLogs();
   const { toasts, push: pushToast, dismiss: dismissToast } = useToast();
 
@@ -90,7 +95,8 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <Image src="/logo.png" alt="TokenGuard" height={28} width={120} className="h-7 w-auto" />
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <UserSelector selectedUserId={selectedUserId} onChange={setSelectedUserId} />
             <button
               onClick={() => refresh()}
               className="p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition-colors"
@@ -222,6 +228,15 @@ export default function Dashboard() {
               : <p className="text-zinc-600 text-sm">No activity data</p>
           }
         </div>
+
+        {/* User Cost Breakdown */}
+        <UserCostBreakdown data={userStats} loading={loading} />
+
+        {/* Latency Table */}
+        <LatencyTable data={latencyStats} loading={loading} />
+
+        {/* Cost Comparison */}
+        <CostComparisonPanel />
 
         {/* Keys Table */}
         <KeysTable

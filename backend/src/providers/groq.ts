@@ -1,10 +1,13 @@
-import { ProviderAdapter, ChatCompletionRequest, ChatCompletionResponse } from './base';
+import { ProviderAdapter, ChatCompletionRequest, ChatCompletionResponse, StreamResult } from './base';
+import { OpenAIAdapter } from './openai';
 
-export class GroqAdapter implements ProviderAdapter {
+export class GroqAdapter extends OpenAIAdapter implements ProviderAdapter {
   name = 'groq';
+  protected apiBase = 'https://api.groq.com/openai/v1';
+  protected providerName = 'Groq';
 
   async chatCompletion(req: ChatCompletionRequest, apiKey: string): Promise<ChatCompletionResponse> {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await fetch(`${this.apiBase}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -19,5 +22,9 @@ export class GroqAdapter implements ProviderAdapter {
     }
 
     return await response.json() as ChatCompletionResponse;
+  }
+
+  async chatCompletionStream(req: ChatCompletionRequest, apiKey: string): Promise<StreamResult> {
+    return super.chatCompletionStream(req, apiKey);
   }
 }

@@ -1,4 +1,4 @@
-import { ChatCompletionRequest, ChatCompletionResponse } from './providers/base';
+import { ChatCompletionRequest, ChatCompletionResponse, StreamResult } from './providers/base';
 import { ProviderRegistry } from './providers';
 
 export interface RouterEntry {
@@ -43,7 +43,7 @@ export class SmartRouter {
     req: ChatCompletionRequest,
     defaultProvider: string,
     routerConfig: RouterEntry[] | null
-  ): Promise<ChatCompletionResponse & { _provider: string }> {
+  ): Promise<ChatCompletionResponse & { _provider: string; _latencyMs: number }> {
     const entries: RouterEntry[] = routerConfig && routerConfig.length > 0
       ? routerConfig
       : [{ provider: defaultProvider, model: req.model }];
@@ -76,7 +76,7 @@ export class SmartRouter {
         const result = await adapter.chatCompletion(routedReq, providerApiKey);
         const latencyMs = Date.now() - startMs;
         console.log(`[Router] ${providerKey}/${modelToUse} succeeded in ${latencyMs}ms`);
-        return { ...result, _provider: providerKey };
+        return { ...result, _provider: providerKey, _latencyMs: latencyMs };
       } catch (err: unknown) {
         const latencyMs = Date.now() - startMs;
         const errMsg = err instanceof Error ? err.message : String(err);
@@ -88,6 +88,55 @@ export class SmartRouter {
           throw err;
         }
         // Retryable — try next provider
+      }
+    }
+
+    throw new RouterExhaustedError(attempts);
+  }
+
+  // Streaming variant — calls chatCompletionStream on the first provider that supports it.
+  // Falls back to non-streaming providers if none support streaming.
+  static async routeStream(
+    req: ChatCompletionRequest,
+    defaultProvider: string,
+    routerConfig: RouterEntry[] | null
+  ): Promise<StreamResult & { _provider: string; _latencyMs: number }> {
+    const entries: RouterEntry[] = routerConfig && routerConfig.length > 0
+      ? routerConfig
+      : [{ provider: defaultProvider, model: req.model }];
+
+    const attempts: Array<{ provider: string; error: string }> = [];
+    const tried = new Set<string>();
+
+    for (const entry of entries) {
+      const providerKey = entry.provider.toLowerCase();
+      if (tried.has(providerKey)) continue;
+      tried.add(providerKey);
+
+      const adapter = ProviderRegistry[providerKey];
+      if (!adapter || !adapter.chatCompletionStream) {
+        attempts.push({ provider: providerKey, error: 'Provider does not support streaming' });
+        continue;
+      }
+
+      const providerApiKey = process.env[`${providerKey.toUpperCase()}_API_KEY`];
+      if (!providerApiKey) {
+        attempts.push({ provider: providerKey, error: 'API key environment variable not set' });
+        continue;
+      }
+
+      const modelToUse = entry.model || req.model;
+      const routedReq: ChatCompletionRequest = { ...req, model: modelToUse };
+      const startMs = Date.now();
+
+      try {
+        const result = await adapter.chatCompletionStream(routedReq, providerApiKey);
+        const latencyMs = Date.now() - startMs;
+        return { ...result, _provider: providerKey, _latencyMs: latencyMs };
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        attempts.push({ provider: providerKey, error: errMsg });
+        if (!isRetryableError(err)) throw err;
       }
     }
 
